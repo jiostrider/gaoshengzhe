@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高晟哲 | 个人主页与在线简历</title>
+    <meta name="description" content="太原理工大学物联网工程本科，精通 C 语言、嵌入式开发与多模型 AI 协同工作流。">
+    <meta property="og:title" content="高晟哲">
+    <meta property="og:description" content="太原理工大学物联网工程 | 寻找物联网/嵌入式/软件开发实习生岗位">
+
+    <style>
+        :root {
+            --bg-card: #f8fafc;
+            --bg-white: #ffffff;
+            --bg-light: #f8fafc;
+            --bg-dark-card: #090d16;
+            --text-main: #000000;
+            --text-sub: #475569;
+            --text-muted: #94a3b8;
+            --orange-dot: #ff5500;
+            --brand-blue: #0055ff;
+            --border-light: #e2e8f0;
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-white);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding-bottom: 120px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 桌面端自定义光标：扩大外圈与中心点，增强反色效果 */
+        .cursor-follower {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: transparent;
+            border: 2px solid #ffffff;
+            mix-blend-mode: difference;
+            pointer-events: none;
+            z-index: 99999;
+            transform: translate3d(-50%, -50%, 0) scale(0.85);
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+            opacity: 0;
+            will-change: left, top, transform, opacity;
+        }
+
+        .cursor-dot {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ffffff;
+            mix-blend-mode: difference;
+            pointer-events: none;
+            z-index: 100000;
+            transform: translate3d(-50%, -50%, 0);
+            opacity: 0;
+            will-change: left, top;
+        }
+
+        /* 顶部固定极简导航栏 */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            z-index: 1000;
+            padding: 20px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-logo {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: #000000;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: relative;
+        }
+
+        /* 音效与打印按钮 */
+        .btn-audio {
+            background: #ffffff;
+            border: 1px solid #000000;
+            color: #000000;
+            padding: 8px 18px;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-audio:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .audio-wave {
+            display: inline-flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 12px;
+        }
+
+        .audio-wave span {
+            width: 2px;
+            background-color: currentColor;
+            border-radius: 1px;
+            animation: wave 1.2s ease-in-out infinite alternate;
+        }
+
+        .audio-wave span:nth-child(1) { height: 40%; animation-delay: 0.1s; }
+        .audio-wave span:nth-child(2) { height: 100%; animation-delay: 0.3s; }
+        .audio-wave span:nth-child(3) { height: 60%; animation-delay: 0.5s; }
+
+        @keyframes wave {
+            0% { height: 30%; }
+            100% { height: 100%; }
+        }
+
+        .btn-print {
+            background: #000000;
+            color: #ffffff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-print:hover {
+            background: var(--brand-blue);
+        }
+
+        /* 顶部音效气泡引导提示 */
+        .audio-guide-bubble {
+            position: absolute;
+            top: 55px;
+            left: 0;
+            background: #000000;
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            z-index: 1100;
+            white-space: nowrap;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .audio-guide-bubble.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .audio-guide-bubble::before {
+            content: "";
+            position: absolute;
+            top: -6px;
+            left: 24px;
+            border-width: 0 6px 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent #000000 transparent;
+        }
+
+        /* 首次手机端引导：指向右侧数字分身 */
+        .ai-guide-bubble {
+            display: none;
+            position: fixed;
+            right: 62px;
+            top: 50%;
+            transform: translateY(-50%) translateX(10px);
+            max-width: min(280px, calc(100vw - 84px));
+            background: #000000;
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1.45;
+            z-index: 1200;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.24);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+
+        .ai-guide-bubble.show {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        .ai-guide-bubble::after {
+            content: "";
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 6px 0 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent transparent #000000;
+        }
+
+        /* 左侧固定招聘官看板 */
+        .sidebar-recruiter {
+            position: fixed;
+            left: 0;
+            top: 45%;
+            transform: translateY(-50%);
+            background: #000000;
+            color: #ffffff;
+            padding: 20px 10px;
+            border-radius: 0 16px 16px 0;
+            z-index: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+            transition: transform 0.2s;
+        }
+
+        .sidebar-recruiter:hover {
+            transform: translateY(-50%) translateX(4px);
+            background: var(--orange-dot);
+        }
+
+        .sidebar-recruiter-text {
+            writing-mode: vertical-lr;
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.2em;
+        }
+
+        /* 右侧固定数字分身 */
+        .sidebar-ai {
+            position: fixed;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #000000;
+            color: #ffffff;
+            padding: 20px 10px;
+            border-radius: 16px 0 0 16px;
+            z-index: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            transition: all 0.2s;
+            touch-action: pan-y;
+            pointer-events: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .sidebar-ai:hover {
+            background: var(--brand-blue);
+            transform: translateY(-50%) translateX(-4px);
+        }
+
+        .sidebar-ai-text {
+            writing-mode: vertical-lr;
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.2em;
+        }
+
+        /* 页面主体 */
+        main {
+            max-width: 1200px;
+            margin: 140px auto 0 auto;
+            padding: 0 40px;
+        }
+
+        /* Hero 名字与口号 */
+        .hero-name-container {
+            margin-bottom: 20px;
+        }
+
+        .hero-name {
+            font-size: clamp(3.5rem, 8vw, 6.5rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            color: #000000;
+            display: inline-block;
+        }
+
+        .hero-name-dot {
+            color: var(--orange-dot);
+            font-size: clamp(3.5rem, 8vw, 6.5rem);
+            line-height: 0;
+        }
+
+        .hero-motto {
+            font-size: clamp(1.8rem, 4vw, 3.2rem);
+            font-weight: 900;
+            color: #64748b;
+            letter-spacing: -0.02em;
+            margin-bottom: 28px;
+        }
+
+        .hero-bio {
+            font-size: 1.1rem;
+            color: var(--text-sub);
+            max-width: 720px;
+            margin-bottom: 40px;
+            line-height: 1.7;
+        }
+
+        /* 联系方式快捷网格 */
+        .contact-pills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            background: #f8fafc;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-bottom: 80px;
+        }
+
+        .contact-pill-item {
+            cursor: pointer;
+        }
+
+        .pill-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .pill-val {
+            font-weight: 800;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            font-family: monospace;
+        }
+
+        /* 章节分类小标 */
+        .section-tag-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .section-tag-icon {
+            color: var(--orange-dot);
+            font-weight: 900;
+            font-size: 1rem;
+        }
+
+        .section-tag-text {
+            color: var(--orange-dot);
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .section-giant-title {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+            margin-bottom: 40px;
+        }
+
+        .section-giant-title .dot {
+            color: var(--orange-dot);
+        }
+
+        /* AI 编程实战与独立作品大黑卡 */
+        .ai-dark-container {
+            background: #000000;
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            color: #ffffff;
+            margin-bottom: 100px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .dark-card-item {
+            background: #000000;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            isolation: isolate;
+            cursor: pointer;
+        }
+
+        .dark-card-item:hover {
+            border-color: rgba(255, 255, 255, 0.28);
+            transform: translateY(-2px);
+        }
+
+        /* 1. 从板块中间向两侧快速扫过的白色线性渐变遮罩 */
+        .dark-card-item::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: -15%;
+            width: 15%;
+            height: 130%;
+            background: linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0%,
+                rgba(255,255,255,0.85) 35%,
+                rgba(255,255,255,1) 50%,
+                rgba(255,255,255,0.85) 65%,
+                rgba(255,255,255,0) 100%
+            );
+            opacity: 0;
+            transform: translateX(-50%) scaleX(0.1);
+            transform-origin: center;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .dark-card-item.is-interacting::before {
+            animation: darkCardSweep 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        @keyframes darkCardSweep {
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) scaleX(0.1);
+            }
+            15% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateX(-50%) scaleX(7.5);
+            }
+        }
+
+        .dark-card-item > * {
+            position: relative;
+            z-index: 1;
+            transition: color 0.2s ease;
+        }
+
+        .dark-num {
+            font-size: 3.5rem;
+            font-weight: 900;
+            font-family: "Impact", sans-serif;
+            line-height: 1;
+            color: transparent;
+            -webkit-text-stroke: 1.5px #ffffff;
+            margin-right: 24px;
+            transition: color 0.2s ease, -webkit-text-stroke-color 0.2s ease;
+        }
+
+        .dark-content {
+            flex-grow: 1;
+        }
+
+        .dark-title {
+            font-size: 1.6rem;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            color: #ffffff;
+            transition: color 0.2s ease;
+        }
+
+        .dark-sub {
+            font-size: 0.92rem;
+            color: #94a3b8;
+            transition: color 0.2s ease;
+        }
+
+        /* 触碰时字体颜色反转为深色 */
+        .dark-card-item.is-interacting .dark-num {
+            -webkit-text-stroke-color: #000000;
+        }
+
+        .dark-card-item.is-interacting .dark-title {
+            color: #000000;
+        }
+
+        .dark-card-item.is-interacting .dark-sub {
+            color: #334155;
+        }
+
+        .dark-card-item.is-interacting .project-link {
+            color: #000000;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        /* 2. 触碰点位旋转弹出的图片画框 (AI1.png, AI2.png, AI3.png, A4.png) */
+        .project-hover-image {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: min(280px, 45vw);
+            aspect-ratio: 16 / 10;
+            padding: 8px;
+            background: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.32);
+            pointer-events: none;
+            z-index: 50000;
+            opacity: 0;
+            transform: translate(-50%, -120%) rotate(-22deg) scale(0.1);
+            transform-origin: 50% 100%;
+            overflow: hidden;
+        }
+
+        .project-hover-image img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #f1f5f9;
+        }
+
+        .project-hover-image.show {
+            animation: aiImageRotatePop 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .project-hover-image.hide {
+            animation: aiImagePopOut 0.2s ease forwards;
+        }
+
+        @keyframes aiImageRotatePop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -120%) rotate(-22deg) scale(0.1);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -120%) rotate(5deg) scale(1.05);
+            }
+            100% {
+                opacity: 1;
+                transform: translate(-50%, -120%) rotate(0deg) scale(1);
+            }
+        }
+
+        @keyframes aiImagePopOut {
+            from {
+                opacity: 1;
+                transform: translate(-50%, -120%) rotate(0deg) scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: translate(-50%, -120%) rotate(10deg) scale(0.8);
+            }
+        }
+
+        .links-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .project-link {
+            color: var(--brand-blue);
+            font-weight: 800;
+            text-decoration: none;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0, 85, 255, 0.06);
+            padding: 6px 14px;
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .project-link:hover {
+            background: rgba(0, 85, 255, 0.15);
+            text-decoration: underline;
+        }
+
+        /* “求学之路” 教育背景 */
+        .edu-section-box {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 48px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 100px;
+        }
+
+        .edu-bg-symbol {
+            position: absolute;
+            right: -20px;
+            bottom: -20px;
+            opacity: 0.06;
+            font-size: 18rem;
+            font-weight: 900;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .edu-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border-light);
+            position: relative;
+            z-index: 2;
+        }
+
+        .edu-row:last-child {
+            border-bottom: none;
+        }
+
+        .edu-label {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        .edu-val-giant {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* 荣誉与证书展示 */
+        .cert-card-box {
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            cursor: pointer;
+            transition: all 0.25s;
+            margin-bottom: 100px;
+        }
+
+        .cert-card-box:hover {
+            border-color: #000000;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.06);
+            transform: translateY(-2px);
+        }
+
+        .cert-img-thumb {
+            width: 180px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-light);
+        }
+
+        /* 右侧 AI 抽屉 */
+        .ai-drawer {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 420px;
+            height: 100vh;
+            background: #ffffff;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.15);
+            z-index: 10000;
+            transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            min-height: 0;
+        }
+
+        .ai-drawer.open { right: 0; }
+
+        .ai-drawer > div:first-child {
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+        }
+
+        .ai-drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .ai-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0;
+        }
+
+        .ai-chip {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ai-chip:hover {
+            border-color: #000000;
+            background: #ffffff;
+        }
+
+        .chat-box {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 16px;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+        }
+
+        .chat-msg { margin-bottom: 12px; }
+
+        .chat-msg.user {
+            text-align: right;
+            color: var(--brand-blue);
+            font-weight: 700;
+        }
+
+        .chat-msg.ai {
+            color: var(--text-main);
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex-grow: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            outline: none;
+        }
+
+        .btn-send {
+            background: #000000;
+            color: #ffffff;
+            border: none;
+            padding: 0 20px;
+            border-radius: var(--radius-sm);
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        /* 证书大图 Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 20000;
+        }
+
+        .modal-overlay img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: var(--radius-md);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #000000;
+            color: #ffffff;
+            padding: 12px 28px;
+            border-radius: 99px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 30000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        @media (max-width: 900px) {
+            .cursor-follower { display: none; }
+            .cursor-dot { display: none; }
+            /* 引导气泡全平台显示 */
+            .dark-card-item { flex-direction: column; align-items: flex-start; gap: 16px; }
+            .cert-card-box { flex-direction: column; align-items: flex-start; }
+            .cert-img-thumb { width: 100%; height: 180px; }
+            header { padding: 16px 24px; }
+            main { padding: 0 24px; margin-top: 90px; }
+            .ai-drawer {
+                width: min(420px, 100vw);
+                max-width: 100vw;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 桌面端自定义光标：扩大外圈与中心点，增强反色效果 -->
+    <div id="cursor-follower" class="cursor-follower" aria-hidden="true"></div>
+    <div id="cursor-dot" class="cursor-dot" aria-hidden="true"></div>
+
+    <!-- 左侧固定招聘官看板贴片 -->
+    <button type="button" class="sidebar-recruiter" aria-label="跳转到联系区域" onclick="showToast('正在为您跳转联系区域...'); window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="sidebar-recruiter-text">招聘官看板</span>
+    </button>
+
+    <!-- 右侧固定数字分身贴片 -->
+    <div class="sidebar-ai" role="button" tabindex="0" aria-label="打开数字分身 AI 问答助手" aria-controls="ai-drawer" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.5 7.5"/><path d="M12 12v10"/></svg>
+        <span class="sidebar-ai-text">数字分身</span>
+    </div>
+    <div id="ai-guide-bubble" class="ai-guide-bubble" role="status" aria-live="polite">点击右侧数字分身，快速向 AI 了解我的项目经验 👉</div>
+
+    <!-- 顶部固定导航栏 -->
+    <header>
+        <a href="#" class="nav-logo">高晟哲</a>
+        
+        <div class="nav-actions">
+            <button id="btn-audio-toggle" class="btn-audio" onclick="toggleAudioSystem()">
+                <span id="audio-icon">🔔</span>
+                <span id="audio-text">开启音效</span>
+            </button>
+            <div id="audio-guide-bubble" class="audio-guide-bubble">点击上面沉浸音效☝️</div>
+            <button class="btn-print" onclick="window.print()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                导出 PDF
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero 区域 -->
+        <div class="hero-name-container">
+            <h1 class="hero-name">高晟哲</h1><span class="hero-name-dot">.</span>
+        </div>
+
+        <h2 class="hero-motto">系统化逻辑思维。永远谦卑，永远进步。</h2>
+
+        <p class="hero-bio">
+            太原理工大学物联网工程本科在读。对人工智能应用具有高度热情，擅长运用 C 语言、嵌入式底层驱动与多模型大语言模型协同工作流，探索代码与人工智能对项目实践的重构。
+        </p>
+
+        <!-- 联系方式快捷网格 -->
+        <div class="contact-pills-grid">
+            <div class="contact-pill-item" onclick="copyText('+86 19229770095', '电话号码已复制')">
+                <div class="pill-label">手机号</div>
+                <div class="pill-val">+86 19229770095 📋</div>
+            </div>
+
+            <div class="contact-pill-item" onclick="copyText('wzgsz2008@foxmail.com', '邮箱已复制')">
+                <div class="pill-label">邮箱</div>
+                <div class="pill-val">wzgsz2008@foxmail.com 📋</div>
+            </div>
+
+            <div class="contact-pill-item" onclick="window.open('https://github.com/jiostrider', '_blank')">
+                <div class="pill-label">GitHub</div>
+                <div class="pill-val" style="display:flex;align-items:center;gap:8px;">
+                    <img src="GitHub.png" alt="" loading="lazy" style="width:18px;height:18px;object-fit:contain;flex-shrink:0;">
+                    github.com/jiostrider ↗
+                </div>
+            </div>
+
+            <div class="contact-pill-item" onclick="window.open('https://www.linkedin.com/in/%E6%99%9F%E5%93%B2-%E9%AB%98-62503742a/', '_blank')">
+                <div class="pill-label">领英</div>
+                <div class="pill-val" style="display:flex;align-items:center;gap:8px;">
+                    <img src="LinkedIn.jpg" alt="" loading="lazy" style="width:18px;height:18px;object-fit:contain;flex-shrink:0;">
+                    领英个人主页 ↗
+                </div>
+            </div>
+        </div>
+
+        <!-- 01 AI 编程实战与作品 -->
+        <div class="section-tag-group">
+            <span class="section-tag-icon">⬢</span>
+            <span class="section-tag-text">作品展示</span>
+        </div>
+
+        <h2 class="section-giant-title">AI 编程实战<span class="dot">。</span></h2>
+
+        <div class="ai-dark-container">
+            <!-- 01 CET-4 英语四级模拟 (对应 AI1.png) -->
+            <div class="dark-card-item" data-preview="AI1.png" data-project-url="https://cet-4-online.netlify.app/" role="link" tabindex="0" aria-label="打开 CET-4 英语四级在线模拟">
+                <div class="dark-num">01</div>
+                <div class="dark-content">
+                    <div class="dark-title">CET-4 英语四级在线模拟</div>
+                    <div class="dark-sub">基于 Web 技术打造的英语四级模拟与交互练习项目</div>
+                </div>
+                <div class="links-group">
+                    <span class="project-link" aria-hidden="true">在线体验 ↗</span>
+                </div>
+            </div>
+
+            <!-- 02 飞机大战 (对应 AI2.png) -->
+            <div class="dark-card-item" data-preview="AI2.png" data-project-url="https://feijidazhan0.netlify.app/" role="link" tabindex="0" aria-label="打开飞机大战试玩">
+                <div class="dark-num">02</div>
+                <div class="dark-content">
+                    <div class="dark-title">《飞机大战》</div>
+                    <div class="dark-sub">独立开发的 Web 互动小游戏，侧重操作反馈与实时交互体验</div>
+                </div>
+                <div class="links-group">
+                    <span class="project-link" aria-hidden="true">在线试玩 ↗</span>
+                </div>
+            </div>
+
+            <!-- 03 小恐龙跑酷 (对应 AI3.png) -->
+            <div class="dark-card-item" data-preview="AI3.png" data-project-url="https://xiaokonglong01.netlify.app/" role="link" tabindex="0" aria-label="打开小恐龙跑酷试玩">
+                <div class="dark-num">03</div>
+                <div class="dark-content">
+                    <div class="dark-title">《小恐龙跑酷》</div>
+                    <div class="dark-sub">独立开发的 Web 跑酷小游戏，围绕障碍躲避与连续操作进行设计</div>
+                </div>
+                <div class="links-group">
+                    <span class="project-link" aria-hidden="true">在线试玩 ↗</span>
+                </div>
+            </div>
+
+            <!-- 04 坦克大战 (对应 A4.png) -->
+            <div class="dark-card-item" data-preview="A4.png" data-project-url="https://jiostrider.github.io/tank/" role="link" tabindex="0" aria-label="打开坦克大战试玩">
+                <div class="dark-num">04</div>
+                <div class="dark-content">
+                    <div class="dark-title">《坦克大战·GSZ战场》</div>
+                    <div class="dark-sub">全经典复刻与关卡拓展的 Web 坦克对战游戏，支持多种技能与按键适配</div>
+                </div>
+                <div class="links-group">
+                    <span class="project-link" aria-hidden="true">在线试玩 ↗</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 02 求学之路 -->
+        <div class="section-tag-group">
+            <span class="section-tag-icon">⬢</span>
+            <span class="section-tag-text">教育背景</span>
+        </div>
+
+        <h2 class="section-giant-title">求学之路<span class="dot">。</span></h2>
+
+        <div class="edu-section-box">
+            <div class="edu-bg-symbol">⚡</div>
+
+            <div class="edu-row">
+                <span class="edu-label">院校</span>
+                <span class="edu-val-giant">
+                    <img src="images.png" alt="" loading="lazy" style="width: 28px; height: 28px;" onerror="this.style.display='none'">
+                    太原理工大学 <span style="font-size:0.8rem; background:#dbeafe; color:var(--brand-blue); padding:2px 8px; border-radius:4px;">211工程 · 双一流</span>
+                </span>
+            </div>
+
+            <div class="edu-row">
+                <span class="edu-label">专业</span>
+                <span class="edu-val-giant" style="color:var(--brand-blue);">物联网工程</span>
+            </div>
+
+            <div class="edu-row">
+                <span class="edu-label">阶段</span>
+                <span class="edu-val-giant">本科在读 (2026.09 - 2030.06 预计)</span>
+            </div>
+
+            <div class="edu-row">
+                <span class="edu-label">核心课程</span>
+                <span style="font-size:0.95rem; font-weight:700; color:var(--text-sub);">
+                    C语言程序设计、数据结构与算法、计算机网络、操作系统、嵌入式系统开发
+                </span>
+            </div>
+        </div>
+
+        <!-- 03 荣誉与专业认证 -->
+        <div class="section-tag-group">
+            <span class="section-tag-icon">⬢</span>
+            <span class="section-tag-text">专业认证</span>
+        </div>
+
+        <h2 class="section-giant-title">荣誉认证<span class="dot">。</span></h2>
+
+        <div class="cert-card-box" onclick="openCertModal()">
+            <img id="cert-img-element" src="cert.jpg" alt="" loading="lazy" class="cert-img-thumb" onerror="handleImageError(this)">
+            <div>
+                <h3 style="font-size:1.3rem; font-weight:900; margin-bottom:6px;">人工智能训练师证书（初级）</h3>
+                <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:8px;">颁发机构：达摩院 - 机器智能技术事业部 / 阿里云</p>
+                <p style="font-size:0.8rem; color:#94a3b8; font-family:monospace;">证书编号：AIT260809225938000178 (点击查看高清大图 🔍)</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 右侧 AI 数字分身抽屉 -->
+    <div id="ai-drawer" class="ai-drawer">
+        <div>
+            <div class="ai-drawer-header">
+                <div style="font-weight:900; font-size:1.1rem;">
+                    <span style="color:var(--brand-blue);">数字分身</span> // AI 问答助手
+                </div>
+                <button style="background:none; border:none; font-size:1.4rem; cursor:pointer;" onclick="toggleAiDrawer()">✕</button>
+            </div>
+
+            <div class="ai-chips">
+                <div class="ai-chip" onclick="sendQuickQuery('评估候选人的核心优势')">✨ 核心优势</div>
+                <div class="ai-chip" onclick="sendQuickQuery('介绍一下你的物联网与 C 语言基础')">🔌 物联网基础</div>
+                <div class="ai-chip" onclick="sendQuickQuery('你平时是如何用 AI 提高开发效率的？')">🤖 AI 提效</div>
+                <div class="ai-chip" onclick="sendQuickQuery('你有什么独立开发的作品？')">🎮 独立作品</div>
+            </div>
+
+            <div class="chat-box" id="chat-box">
+                <div class="chat-msg ai">
+                    您好！我是高晟哲的数字分身。您可以向我询问关于他的教育背景、C语言/物联网基础、AI 提效经验或独立作品的任何问题！
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-group">
+            <input type="text" id="chat-input" class="chat-input" placeholder="输入提问..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button class="btn-send" onclick="sendChatMessage()">发送</button>
+        </div>
+    </div>
+
+    <!-- 证书大图 Modal -->
+    <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-label="证书大图" onclick="closeCertModal(event)">
+        <img id="modal-img" src="" alt="" loading="lazy" onclick="event.stopPropagation()">
+    </div>
+
+    <!-- AI 实战作品触碰旋转弹出预览画框 (AI1.png, AI2.png, AI3.png, A4.png) -->
+    <div id="project-hover-image-1" class="project-hover-image" aria-hidden="true">
+        <img src="AI1.png" alt="" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'280\' height=\'175\' viewBox=\'0 0 280 175\'><rect width=\'280\' height=\'175\' fill=\'%23f1f5f9\'/><rect x=\'12\' y=\'12\' width=\'256\' height=\'151\' rx=\'8\' fill=\'none\' stroke=\'%230055ff\' stroke-width=\'2\' stroke-dasharray=\'6 4\'/><text x=\'140\' y=\'92\' font-size=\'16\' fill=\'%230055ff\' font-weight=\'bold\' text-anchor=\'middle\'>画框占位符 (AI 预览)</text></svg>'">
+    </div>
+    <div id="project-hover-image-2" class="project-hover-image" aria-hidden="true">
+        <img src="AI2.png" alt="" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'280\' height=\'175\' viewBox=\'0 0 280 175\'><rect width=\'280\' height=\'175\' fill=\'%23f1f5f9\'/><rect x=\'12\' y=\'12\' width=\'256\' height=\'151\' rx=\'8\' fill=\'none\' stroke=\'%230055ff\' stroke-width=\'2\' stroke-dasharray=\'6 4\'/><text x=\'140\' y=\'92\' font-size=\'16\' fill=\'%230055ff\' font-weight=\'bold\' text-anchor=\'middle\'>画框占位符 (AI 预览)</text></svg>'">
+    </div>
+    <div id="project-hover-image-3" class="project-hover-image" aria-hidden="true">
+        <img src="AI3.png" alt="" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'280\' height=\'175\' viewBox=\'0 0 280 175\'><rect width=\'280\' height=\'175\' fill=\'%23f1f5f9\'/><rect x=\'12\' y=\'12\' width=\'256\' height=\'151\' rx=\'8\' fill=\'none\' stroke=\'%230055ff\' stroke-width=\'2\' stroke-dasharray=\'6 4\'/><text x=\'140\' y=\'92\' font-size=\'16\' fill=\'%230055ff\' font-weight=\'bold\' text-anchor=\'middle\'>画框占位符 (AI 预览)</text></svg>'">
+    </div>
+    <div id="project-hover-image-4" class="project-hover-image" aria-hidden="true">
+        <img src="A4.png" alt="" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'280\' height=\'175\' viewBox=\'0 0 280 175\'><rect width=\'280\' height=\'175\' fill=\'%23f1f5f9\'/><rect x=\'12\' y=\'12\' width=\'256\' height=\'151\' rx=\'8\' fill=\'none\' stroke=\'%230055ff\' stroke-width=\'2\' stroke-dasharray=\'6 4\'/><text x=\'140\' y=\'92\' font-size=\'16\' fill=\'%230055ff\' font-weight=\'bold\' text-anchor=\'middle\'>画框占位符 (坦克大战)</text></svg>'">
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="toast">复制成功！</div>
+
+    <script>
+        /* ==========================================================================
+           0. 手机端引导流程：先提示开启音效；用户点击开启后，再提示数字分身 3 秒
+           ========================================================================== */
+        const isMobileGuide = () => window.matchMedia('(max-width: 900px)').matches;
+        let aiGuideTimer = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const audioBubble = document.getElementById('audio-guide-bubble');
+            if (!audioBubble) return;
+
+            window.setTimeout(() => {
+                audioBubble.classList.add('show');
+            }, 450);
+        });
+
+        function showAIGuideAfterAudio() {
+            const audioBubble = document.getElementById('audio-guide-bubble');
+            const aiBubble = document.getElementById('ai-guide-bubble');
+            if (audioBubble) audioBubble.classList.remove('show');
+            if (!aiBubble) return;
+
+            if (aiGuideTimer) {
+                clearTimeout(aiGuideTimer);
+                aiGuideTimer = null;
+            }
+
+            aiBubble.classList.add('show');
+            aiGuideTimer = window.setTimeout(() => {
+                aiBubble.classList.remove('show');
+                aiGuideTimer = null;
+            }, 3000);
+        }
+
+        /* ==========================================================================
+           1. WEB AUDIO API 原生声学系统 (默认关闭)
+           ========================================================================== */
+        let audioCtx = null;
+        let isAudioEnabled = false;
+        let ambientGainNode = null;
+        let ambientTimer = null;
+        let currentChordIndex = 0;
+        let lastScrollY = window.scrollY;
+        let scrollAccDistance = 0;
+
+        const pentatonicScale = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51];
+        const ambientChords = [
+            [261.63, 329.63, 392.00, 493.88],
+            [220.00, 261.63, 329.63, 392.00],
+            [174.61, 261.63, 329.63, 349.23],
+            [196.00, 246.94, 293.66, 329.63]
+        ];
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        async function toggleAudioSystem() {
+            const ctx = getAudioContext();
+            if (ctx.state === 'suspended') {
+                await ctx.resume();
+            }
+            isAudioEnabled = !isAudioEnabled;
+
+            const icon = document.getElementById('audio-icon');
+            const text = document.getElementById('audio-text');
+
+            if (isAudioEnabled) {
+                icon.innerHTML = `<div class="audio-wave"><span></span><span></span><span></span></div>`;
+                text.textContent = '沉浸音效';
+                showToast('音效已开启');
+                playChimeEntrance();
+                startAmbientMusic();
+                showAIGuideAfterAudio();
+            } else {
+                icon.textContent = '🔔';
+                text.textContent = '开启音效';
+                showToast('音效已静音');
+                stopAmbientMusic();
+            }
+        }
+
+        function playChimeEntrance() {
+            if (!isAudioEnabled) return;
+            const ctx = getAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            const now = ctx.currentTime;
+            const entranceNotes = [261.63, 329.63, 392.00, 493.88, 587.33, 1046.50, 1318.51];
+
+            entranceNotes.forEach((freq, idx) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+
+                osc.type = idx >= 5 ? 'sine' : 'triangle';
+                osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(idx >= 5 ? 3500 : 2200, now);
+
+                gain.gain.setValueAtTime(0.0001, now + idx * 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.18 / (idx + 1), now + idx * 0.08 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 1.2);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now + idx * 0.08);
+                osc.stop(now + idx * 0.08 + 1.3);
+            });
+        }
+
+        window.addEventListener('scroll', () => {
+            if (!isAudioEnabled) return;
+            const ctx = getAudioContext();
+            if (ctx && ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            if (!ctx || ctx.state !== 'running') return;
+
+            const currentY = window.scrollY;
+            const delta = Math.abs(currentY - lastScrollY);
+            scrollAccDistance += delta;
+            lastScrollY = currentY;
+
+            if (scrollAccDistance > 120) {
+                scrollAccDistance = 0;
+                playWindchimeNote();
+            }
+        });
+
+        function playWindchimeNote() {
+            if (!isAudioEnabled) return;
+            const ctx = getAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            const now = ctx.currentTime;
+            const noteFreq = pentatonicScale[Math.floor(Math.random() * pentatonicScale.length)];
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(noteFreq, now);
+
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.linearRampToValueAtTime(0.06, now + 0.005);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.85);
+        }
+
+        let clickPianoIndex = 0;
+        const clickPianoScale = [
+            261.63, 293.66, 329.63, 392.00, 440.00,
+            523.25, 587.33, 659.25, 783.99, 880.00
+        ];
+
+        function playClickPianoNote() {
+            if (!isAudioEnabled) return;
+            const ctx = getAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            const now = ctx.currentTime + 0.005;
+            const base = clickPianoScale[clickPianoIndex % clickPianoScale.length];
+            clickPianoIndex++;
+
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.0001, now);
+            master.gain.exponentialRampToValueAtTime(0.055, now + 0.008);
+            master.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+            master.connect(ctx.destination);
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(3200, now);
+            filter.Q.setValueAtTime(0.8, now);
+            filter.connect(master);
+
+            const harmonics = [
+                { mult: 1, gain: 1.00 },
+                { mult: 2, gain: 0.34 },
+                { mult: 3, gain: 0.14 },
+                { mult: 4, gain: 0.07 }
+            ];
+
+            harmonics.forEach(({ mult, gain }) => {
+                const osc = ctx.createOscillator();
+                const partialGain = ctx.createGain();
+                osc.type = 'sine';
+                const detune = mult === 1 ? 0 : (Math.random() - 0.5) * 5;
+                osc.frequency.setValueAtTime(base * mult, now);
+                osc.detune.setValueAtTime(detune, now);
+
+                partialGain.gain.setValueAtTime(0.0001, now);
+                partialGain.gain.exponentialRampToValueAtTime(0.05 * gain, now + 0.004);
+                partialGain.gain.exponentialRampToValueAtTime(0.0001, now + (0.42 + mult * 0.06));
+
+                osc.connect(partialGain);
+                partialGain.connect(filter);
+                osc.start(now);
+                osc.stop(now + 0.55 + mult * 0.06);
+            });
+
+            const click = ctx.createOscillator();
+            const clickGain = ctx.createGain();
+            const clickFilter = ctx.createBiquadFilter();
+            click.type = 'triangle';
+            click.frequency.setValueAtTime(base * 5.5, now);
+            clickFilter.type = 'highpass';
+            clickFilter.frequency.setValueAtTime(1800, now);
+            clickGain.gain.setValueAtTime(0.018, now);
+            clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
+            click.connect(clickFilter);
+            clickFilter.connect(clickGain);
+            clickGain.connect(ctx.destination);
+            click.start(now);
+            click.stop(now + 0.06);
+        }
+
+        document.addEventListener('click', playClickPianoNote, { passive: true });
+
+        function startAmbientMusic() {
+            const ctx = getAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            if (!ambientGainNode) {
+                ambientGainNode = ctx.createGain();
+                ambientGainNode.gain.setValueAtTime(0.06, ctx.currentTime);
+                ambientGainNode.connect(ctx.destination);
+            }
+
+            if (!ambientTimer) {
+                playNextAmbientChord();
+                ambientTimer = setInterval(playNextAmbientChord, 3500);
+            }
+        }
+
+        function playNextAmbientChord() {
+            if (!isAudioEnabled) return;
+            const ctx = getAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            const now = ctx.currentTime;
+            const chord = ambientChords[currentChordIndex];
+            currentChordIndex = (currentChordIndex + 1) % ambientChords.length;
+
+            chord.forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq + (i % 2 === 0 ? 0.3 : -0.3), now);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1200, now);
+
+                gain.gain.setValueAtTime(0.0001, now);
+                gain.gain.linearRampToValueAtTime(0.02, now + 0.8);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.4);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ambientGainNode);
+
+                osc.start(now);
+                osc.stop(now + 3.45);
+            });
+        }
+
+        function stopAmbientMusic() {
+            if (ambientTimer) {
+                clearInterval(ambientTimer);
+                ambientTimer = null;
+            }
+        }
+
+        /* ==========================================================================
+           2. 鼠标平滑跟随反色透镜 (扩大并增强)
+           ========================================================================== */
+        let mouseX = -100, mouseY = -100;
+        let circleX = -100, circleY = -100;
+        let cursorReady = false;
+        let isHoveringText = false;
+
+        const cursorFollower = document.getElementById('cursor-follower');
+        const cursorDot = document.getElementById('cursor-dot');
+
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            if (!cursorReady) {
+                circleX = mouseX;
+                circleY = mouseY;
+                cursorReady = true;
+            }
+
+            if (cursorDot) {
+                cursorDot.style.left = mouseX + 'px';
+                cursorDot.style.top = mouseY + 'px';
+                cursorDot.style.opacity = '1';
+            }
+
+            const target = e.target;
+            const isText = target && (
+                target.closest('p, h1, h2, h3, h4, span, a, button, .dark-card-item, .cert-card-box, .contact-pill-item') ||
+                (target.childNodes.length > 0 && Array.from(target.childNodes).some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0))
+            );
+            isHoveringText = !!isText;
+
+            if (cursorFollower) cursorFollower.style.opacity = '1';
+        }, { passive: true });
+
+        window.addEventListener('mouseleave', () => {
+            if (cursorFollower) cursorFollower.style.opacity = '0';
+            if (cursorDot) cursorDot.style.opacity = '0';
+        });
+
+        function animateCursor() {
+            circleX += (mouseX - circleX) * 0.075;
+            circleY += (mouseY - circleY) * 0.075;
+
+            if (cursorFollower) {
+                cursorFollower.style.left = circleX + 'px';
+                cursorFollower.style.top = circleY + 'px';
+                cursorFollower.style.transform = `translate3d(-50%, -50%, 0) scale(${isHoveringText ? 1.35 : 0.85})`;
+            }
+
+            requestAnimationFrame(animateCursor);
+        }
+        requestAnimationFrame(animateCursor);
+
+        /* ==========================================================================
+           3. AI 编程实战板块：白色线性渐变横扫 + 触碰点旋转弹出图片画框 (AI1.png / AI2.png / AI3.png / A4.png)
+           ========================================================================== */
+        const projectCards = document.querySelectorAll('.ai-dark-container .dark-card-item');
+        const projectHoverImages = {
+            'AI1.png': document.getElementById('project-hover-image-1'),
+            'AI2.png': document.getElementById('project-hover-image-2'),
+            'AI3.png': document.getElementById('project-hover-image-3'),
+            'A4.png': document.getElementById('project-hover-image-4')
+        };
+        let currentHoverImage = null;
+        let projectImageHideTimer = null;
+
+        function positionProjectImage(clientX, clientY) {
+            const img = currentHoverImage;
+            if (!img) return;
+            const padding = 16;
+            const rect = img.getBoundingClientRect();
+            let x = clientX;
+            let y = clientY;
+
+            if (x - rect.width / 2 < padding) x = rect.width / 2 + padding;
+            if (x + rect.width / 2 > window.innerWidth - padding) x = window.innerWidth - rect.width / 2 - padding;
+            if (y - rect.height - 24 < padding) y = clientY + rect.height + 24;
+
+            img.style.left = `${x}px`;
+            img.style.top = `${y}px`;
+        }
+
+        function showProjectPreview(card, clientX, clientY) {
+            const previewSrc = card.dataset.preview || 'AI1.png';
+            const targetImg = projectHoverImages[previewSrc];
+            if (!targetImg) return;
+
+            // 立即隐藏其他所有预览图，确保不会出现图片不匹配
+            Object.values(projectHoverImages).forEach(img => {
+                if (img && img !== targetImg) {
+                    img.classList.remove('show', 'hide');
+                }
+            });
+
+            currentHoverImage = targetImg;
+            projectCards.forEach(item => {
+                if (item !== card) item.classList.remove('is-interacting');
+            });
+
+            card.classList.remove('is-interacting');
+            void card.offsetWidth;
+            card.classList.add('is-interacting');
+
+            clearTimeout(projectImageHideTimer);
+            targetImg.classList.remove('hide', 'show');
+            positionProjectImage(clientX, clientY);
+            void targetImg.offsetWidth;
+            targetImg.classList.add('show');
+        }
+
+        function hideProjectPreview(card) {
+            card?.classList.remove('is-interacting');
+            if (!currentHoverImage) return;
+
+            currentHoverImage.classList.remove('show');
+            currentHoverImage.classList.add('hide');
+            clearTimeout(projectImageHideTimer);
+            projectImageHideTimer = setTimeout(() => {
+                if (currentHoverImage) {
+                    currentHoverImage.classList.remove('hide');
+                    currentHoverImage = null;
+                }
+            }, 220);
+        }
+
+        projectCards.forEach(card => {
+            const projectUrl = card.dataset.projectUrl;
+            const openProject = () => {
+                if (!projectUrl) return;
+                window.open(projectUrl, '_blank', 'noopener,noreferrer');
+            };
+
+            card.addEventListener('click', openProject);
+            card.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openProject();
+                }
+            });
+
+            card.addEventListener('pointerenter', event => {
+                if (event.pointerType === 'mouse' || event.pointerType === '') {
+                    showProjectPreview(card, event.clientX, event.clientY);
+                }
+            });
+
+            card.addEventListener('pointermove', event => {
+                if (event.pointerType === 'mouse' || event.pointerType === '') {
+                    positionProjectImage(event.clientX, event.clientY);
+                }
+            }, { passive: true });
+
+            card.addEventListener('pointerleave', event => {
+                if (event.pointerType === 'mouse' || event.pointerType === '') {
+                    hideProjectPreview(card);
+                }
+            });
+
+            card.addEventListener('pointerdown', event => {
+                if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+                    showProjectPreview(card, event.clientX, event.clientY);
+
+                    clearTimeout(projectImageHideTimer);
+                    projectImageHideTimer = setTimeout(() => hideProjectPreview(card), 2500);
+                }
+            }, { passive: true });
+        });
+
+        /* ==========================================================================
+           4. 复制与 Toast 交互
+           ========================================================================== */
+        const aiTrigger = document.querySelector('.sidebar-ai');
+
+        function isPointInsideAiTrigger(clientX, clientY) {
+            if (!aiTrigger) return false;
+            const rect = aiTrigger.getBoundingClientRect();
+            return clientX >= rect.left && clientX <= rect.right &&
+                   clientY >= rect.top && clientY <= rect.bottom;
+        }
+
+        let aiPointerStart = null;
+
+        document.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            if (isPointInsideAiTrigger(event.clientX, event.clientY)) {
+                aiPointerStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+            } else {
+                aiPointerStart = null;
+            }
+        }, { passive: true, capture: true });
+
+        document.addEventListener('pointerup', (event) => {
+            if (!aiPointerStart) return;
+            const dx = event.clientX - aiPointerStart.x;
+            const dy = event.clientY - aiPointerStart.y;
+            const moved = Math.hypot(dx, dy);
+            const stillInside = isPointInsideAiTrigger(event.clientX, event.clientY);
+            const samePointer = event.pointerId === aiPointerStart.pointerId;
+            if (samePointer && moved < 8 && stillInside) {
+                toggleAiDrawer();
+            }
+            aiPointerStart = null;
+        }, { passive: true, capture: true });
+
+        if (aiTrigger) {
+            aiTrigger.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleAiDrawer();
+                }
+            });
+        }
+
+        function toggleAiDrawer() {
+            const drawer = document.getElementById('ai-drawer');
+            const trigger = document.querySelector('.sidebar-ai');
+            const isOpen = drawer.classList.toggle('open');
+            if (trigger) trigger.setAttribute('aria-expanded', String(isOpen));
+            if (isOpen) {
+                const input = document.getElementById('chat-input');
+                setTimeout(() => input?.focus(), 180);
+            }
+        }
+
+        async function copyText(text, msg) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.setAttribute("readonly", "");
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-9999px";
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    if (!ok) throw new Error('copy command failed');
+                }
+                showToast(msg || "已成功复制到剪贴板");
+            } catch (err) {
+                showToast("复制失败，请手动选择复制");
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        /* ==========================================================================
+           5. 证书降级与弹窗
+           ========================================================================== */
+        function handleImageError(img) {
+            const svgText = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='120' viewBox='0 0 180 120'><rect width='180' height='120' fill='%23f8fafc'/><rect x='6' y='6' width='168' height='108' fill='none' stroke='%23e2e8f0' stroke-width='2'/><text x='90' y='58' font-size='12' fill='%230055ff' font-weight='bold' text-anchor='middle'></text><text x='90' y='76' font-size='10' fill='%2364748b' text-anchor='middle'>达摩院 / 阿里云</text></svg>`;
+            img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgText);
+        }
+
+        function openCertModal() {
+            const img = document.getElementById('cert-img-element');
+            const modal = document.getElementById('modal-overlay');
+            const modalImg = document.getElementById('modal-img');
+            modalImg.src = img.src;
+            modal.style.display = 'flex';
+        }
+
+        function closeCertModal(event) {
+            if (event && event.target && event.target.id !== 'modal-overlay') return;
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            const drawer = document.getElementById('ai-drawer');
+            if (drawer?.classList.contains('open')) toggleAiDrawer();
+            const modal = document.getElementById('modal-overlay');
+            if (modal?.style.display === 'flex') closeCertModal();
+        });
+
+        /* ==========================================================================
+           6. AI 数字分身问答
+           ========================================================================== */
+        function sendQuickQuery(query) {
+            document.getElementById('chat-input').value = query;
+            sendChatMessage();
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const query = input.value.trim();
+            if (!query) return;
+
+            const chatBox = document.getElementById('chat-box');
+
+            const userDiv = document.createElement('div');
+            userDiv.className = 'chat-msg user';
+            userDiv.textContent = query;
+            chatBox.appendChild(userDiv);
+
+            input.value = '';
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            setTimeout(() => {
+                const aiDiv = document.createElement('div');
+                aiDiv.className = 'chat-msg ai';
+                aiDiv.innerHTML = getSmartAIResponse(query);
+                chatBox.appendChild(aiDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 300);
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>\"']/g, (char) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;'
+            })[char]);
+        }
+
+        function getSmartAIResponse(q) {
+            const safeQ = escapeHtml(q);
+            const lower = q.toLowerCase();
+            if (lower.includes('优势') || lower.includes('总结') || lower.includes('亮点')) {
+                return "高晟哲的核心优势包含 3 点：<br>1. <strong>扎实的底层基础</strong>：太原理工大学物联网工程专业，熟练掌握 C 语言、数据结构与网络通信；<br>2. <strong>AI 代码高效协同</strong>：熟练运用 Gemini/Claude/Copilot 重构代码与编写测试；<br>3. <strong>敏捷交付能力</strong>：独立开发了多款 H5 游戏（含坦克大战）、CET-4 模拟系统与自动化工作流工具。";
+            } else if (lower.includes('c语言') || lower.includes('物联网') || lower.includes('基础') || lower.includes('硬件')) {
+                return "在物联网与 C 语言领域：高晟哲深入学习了 C 语言程序设计、操作系统原理与通信协议，了解 UART 串口数据解包与驱动逻辑，具备良好的硬件感知与系统级逻辑思考力。";
+            } else if (lower.includes('ai') || lower.includes('提效') || lower.includes('工作流')) {
+                return "高晟哲将 AI 作为核心生产力：通过精准的 Prompt 工程让 AI 协助重构代码、生成单元测试，并搭建了可将长篇论文/技术资料自动转换为 Markdown/PPT 演示文稿的工作流。";
+            } else if (lower.includes('作品') || lower.includes('游戏') || lower.includes('项目') || lower.includes('英语') || lower.includes('坦克')) {
+                return "他独立开发了 <strong>CET-4 英语四级在线模拟系统</strong>、<strong>《飞机大战》</strong>、<strong>《小恐龙跑酷》</strong> 与 <strong>《坦克大战·GSZ战场》</strong>，您可以直接在作品展示卡片中点击体验！";
+            } else if (lower.includes('联系') || lower.includes('电话') || lower.includes('邮箱')) {
+                return "您可以直接联系他：<br>• 电话：+86 19229770095<br>• 邮箱：wzgsz2008@foxmail.com<br>• 领英 & GitHub 链接已放置在页面顶部。";
+            }
+            return `针对您的提问“${safeQ}”：高晟哲是一位兼具<strong>物联网底层研发潜力</strong>与<strong>现代化 AI 高效开发工具链</strong>的理工科人才。非常欢迎您通过邮箱 wzgsz2008@foxmail.com 与他进一步沟通！`;
+        }
+    </script>
+</body>
+</html>
