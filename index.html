@@ -13,10 +13,11 @@
   - 背景视频保留远程 MUX HLS 流（联网时播放，离线时显示 CSS 渐变底）
   ============================================================
 -->
-<!-- 联网时可用的字体（离线时自动降级为系统字体） -->
+<!-- 联网时可用的字体（离线时自动降级为系统字体）；preload+onload 非阻塞加载，不拖慢首帧 -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" /></noscript>
 <style>
   /* ============================================================
      全局基础
@@ -193,7 +194,7 @@
     border-radius: 999px; padding: 12px 24px; border: none;
     background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.85);
     font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;
-    transition: transform 0.3s, color 0.3s;
+    transition: transform 0.3s, color 0.3s; text-decoration: none;
   }
   .pill-btn:hover { transform: scale(1.05); color: #fff; }
   .hero-input { display: flex; align-items: center; }
@@ -496,11 +497,11 @@
 <div class="cursor-ring" id="cursorRing"></div>
 
 <!-- 背景视频（远程 HLS 流，联网自动播放） -->
-<video class="bg-video" id="bgVideo" muted autoplay loop playsinline></video>
+<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="none"></video>
 <div class="bg-overlay"></div>
 
 <!-- BGM 音频（双码率自适应） -->
-<audio id="bgm" loop preload="auto"></audio>
+<audio id="bgm" loop preload="none"></audio>
 
 <!-- ==================== Splash 启动页 ==================== -->
 <div class="splash" id="splash">
@@ -610,7 +611,7 @@
       <h2 class="sec-title">求学之路</h2>
     </div>
     <div class="edu-card liquid-glass">
-      <img src="./src/assets/images/images.png" alt="太原理工大学" />
+      <img src="./src/assets/images/images.png" alt="太原理工大学" loading="lazy" decoding="async" />
       <h3>太原理工大学 <span class="tag211">211 双一流</span></h3>
       <p style="color:rgba(255,255,255,0.7);">物联网工程 / 本科在读</p>
       <p class="muted">2026.9 - 2030.6（预计）</p>
@@ -679,7 +680,7 @@
 </div>
 
 <!-- ==================== hls.js（CDN，联网时加载） ==================== -->
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" onload="initBgVideo()"></script>
 <script>
 /* ============================================================
    工具函数
@@ -701,68 +702,107 @@ function scrollToSection(id) {
   const dot = $('#cursorDot'), ring = $('#cursorRing');
   const target = { x: -100, y: -100 };
   const ringPos = { x: -100, y: -100 };
+  let raf = 0;
   document.addEventListener('mousemove', (e) => {
     target.x = e.clientX; target.y = e.clientY;
     dot.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 3}px)`;
   });
-  (function animate() {
+  function animate() {
     ringPos.x += (target.x - ringPos.x) * 0.08;
     ringPos.y += (target.y - ringPos.y) * 0.08;
     ring.style.transform = `translate(${ringPos.x - 16}px, ${ringPos.y - 16}px)`;
-    requestAnimationFrame(animate);
-  })();
+    raf = requestAnimationFrame(animate);
+  }
+  // 内存/主线程优化：页面隐藏时暂停 rAF 循环，回到前台再恢复
+  document.addEventListener('visibilitychange', () => {
+    cancelAnimationFrame(raf);
+    if (!document.hidden) raf = requestAnimationFrame(animate);
+  });
+  raf = requestAnimationFrame(animate);
 })();
 
 /* ============================================================
    Splash：图片预加载进度 + 点击进入
    ============================================================ */
 (function initSplash() {
-  const splash = $('#splash'), bar = $('#loadBar');
-  // 与原版一致：Splash 显示期间锁定页面滚动
+  const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
+  // Splash 显示期间锁定页面滚动
   document.body.style.overflow = 'hidden';
-  // 预加载关键图片（项目卡片 + PPT + 证书 + 学校图标）
-  const images = [
-    './src/assets/images/cet4.webp', './src/assets/images/feijidazhan.webp',
-    './src/assets/images/xiaokonglong.webp', './src/assets/images/tank.webp',
-    './src/assets/images/images.png',
-    ...Array.from({ length: 6 }, (_, i) =>
-      `./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp`),
-  ];
-  let loaded = 0;
-  const total = images.length;
-  const tick = () => { loaded++; bar.style.width = Math.round((loaded / total) * 100) + '%'; };
-  images.forEach((src) => {
-    const img = new Image();
-    img.onload = img.onerror = tick;
-    img.src = src;
+
+  // 根据网络情况决定最长加载等待：差网多等（6s），好网少等（3s）
+  const MAX_WAIT = networkTier() === 'poor' ? 6000 : 3000;
+  const start = performance.now();
+  let videoReady = false, audioReady = false, entered = false;
+  let t = null;
+
+  // 壁纸（背景视频）：Splash 期间即开始缓冲/播放（muted 可自动播放），进入后立即可见
+  $('#bgVideo').addEventListener('canplay', () => { videoReady = true; onReady(); });
+  initBgVideo();
+
+  // 音乐（BGM）：Splash 期间即开始预加载，进入时点击手势下立即出声
+  const audio = $('#bgm');
+  audio.preload = 'auto';
+  audio.src = networkTier() === 'good' ? './src/assets/audio/bgm.mp3' : './src/assets/audio/bgm-low.mp3';
+  audio.load();
+  audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
+
+  // 进度条：资源就绪进度（视频 50% + 音频 50%）与时间进度取较大值
+  (function fill() {
+    const tElapsed = Math.min(1, (performance.now() - start) / MAX_WAIT);
+    const ready = (videoReady ? 50 : 0) + (audioReady ? 50 : 0);
+    bar.style.width = Math.max(ready, Math.round(tElapsed * 100)) + '%';
+    if (!entered) requestAnimationFrame(fill);
+  })();
+
+  function canEnter() { return videoReady && audioReady; }
+
+  // 点击进入：资源就绪立即进入；未就绪则保持等待（保证一进入就有壁纸和音乐）
+  splash.addEventListener('click', () => {
+    if (canEnter()) enterSite();
+    else enter.textContent = '资源加载中…';
   });
-  // 快速兜底：2.5 秒内无论如何放行
-  setTimeout(() => { if (!splash.classList.contains('hidden')) enterSite(); }, 2500);
-  splash.addEventListener('click', enterSite);
+
+  // 兜底：到 MAX_WAIT 无论如何放行（避免长时间卡在启动页）
+  t = setTimeout(() => enterSite(), MAX_WAIT);
+
+  function onReady() {
+    if (canEnter() && !entered) { clearTimeout(t); enter.textContent = '点击进入'; }
+  }
+
   function enterSite() {
+    if (entered) return;
+    entered = true;
+    clearTimeout(t);
     splash.classList.add('hidden');
     document.body.style.overflow = '';
-    bgmPlay(); // 用户交互后解锁音频
+    window.__entered = true;
+    bgmPlay(); // 音频已预加载，点击手势下立即出声
   }
 })();
 
 /* ============================================================
    背景视频：远程 MUX HLS 流（hls.js / Safari 原生）
+   - 壁纸保障：Splash 展示期间即开始缓冲/播放（muted 可自动播放），
+     用户进入时壁纸已就绪；加载失败时保持 CSS 渐变底（不黑屏）。
    ============================================================ */
-(function initBgVideo() {
+var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
+function initBgVideo() {
+  if (__bgVideoStarted) return;
   const video = $('#bgVideo');
+  if (!video) return;
   const src = "https://stream.mux.com/kimF2ha9zLrX64H00UgLGPflCzNtl1T0215MlAmeOztv8.m3u8";
   if (window.Hls && Hls.isSupported()) {
+    __bgVideoStarted = true;
     const hls = new Hls({ enableWorker: true });
     hls.loadSource(src);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    __bgVideoStarted = true;
     video.src = src;
     video.addEventListener('loadedmetadata', () => video.play().catch(() => {}));
   }
-  // 无网/CDN 加载失败时保持 CSS 渐变底（不黑屏）
-})();
+}
 
 /* ============================================================
    BGM：双码率自适应 + 音乐开关
@@ -781,7 +821,8 @@ function networkTier() {
 function bgmPlay() {
   const audio = $('#bgm');
   if (!audioOn) return;
-  audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW;
+  // Splash 期间已设置源并预加载；这里不重复设置 src，避免重新缓冲
+  if (!audio.getAttribute('src')) audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW;
   audio.volume = 1;
   audio.play().catch(() => {});
 }
@@ -1154,10 +1195,10 @@ function copyText(btn) {
    全景项目演示（发牌动画）
    ============================================================ */
 const dealProjects = [
-  { id: '01', title: 'CET-4 在线模拟', link: 'https://cet-4-online.netlify.app/', img: './public/images/cet4.png' },
-  { id: '02', title: '飞机大战', link: 'https://feijidazhan0.netlify.app/', img: './public/images/feijidazhan.png' },
-  { id: '03', title: '小恐龙跑酷', link: 'https://xiaokonglong01.netlify.app/', img: './public/images/xiaokonglong.png' },
-  { id: '04', title: '坦克大战·GSZ', link: 'https://jiostrider.github.io/tank/', img: './public/images/tank.png' },
+  { id: '01', title: 'CET-4 在线模拟', link: 'https://cet-4-online.netlify.app/', img: './src/assets/images/cet4.webp' },
+  { id: '02', title: '飞机大战', link: 'https://feijidazhan0.netlify.app/', img: './src/assets/images/feijidazhan.webp' },
+  { id: '03', title: '小恐龙跑酷', link: 'https://xiaokonglong01.netlify.app/', img: './src/assets/images/xiaokonglong.webp' },
+  { id: '04', title: '坦克大战·GSZ', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.webp' },
 ];
 function sizeFor() {
   const w = window.innerWidth;
@@ -1186,7 +1227,7 @@ function openDeal() {
          style="width:${cw}px;height:${ch}px;z-index:${c.z};"
          data-tx="${tx}" data-ty="${ty}" data-arc="${arc}" data-rz="${c.rz}" data-ry="${c.ry}"
          onclick="event.stopPropagation()">
-        <img src="${p.img}" alt="${p.title}" />
+        <img src="${p.img}" alt="${p.title}" decoding="async" />
         <span class="tag">${p.title}</span>
       </a>`;
   }).join('');
