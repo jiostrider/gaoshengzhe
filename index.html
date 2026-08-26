@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>高晟哲 | Jimmy Gao · 个人作品集</title>
+<!--
+  ============================================================
+  高保真静态单页版 · portfolio.html
+  - 复刻 React 作品集全部动效（原生 JS/CSS 实现，零构建依赖）
+  - 双击 index.html 同级目录下的本文件即可浏览
+  - 资源均引用本地相对路径；联网时加载 Google Fonts / hls.js CDN
+  - 背景视频保留远程 MUX HLS 流（联网时播放，离线时显示 CSS 渐变底）
+  ============================================================
+-->
+<!-- 联网时可用的字体（离线时自动降级为系统字体）；preload+onload 非阻塞加载，不拖慢首帧 -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" /></noscript>
+<!-- 背景海报帧（本地压缩 WebP）：页面加载即开始下载，点击进入时已缓存 → 秒开 -->
+<link rel="preload" as="image" href="./src/assets/images/bg-poster.webp" />
+<style>
+  /* ============================================================
+     全局基础
+     ============================================================ */
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-serif: "Instrument Serif", Georgia, serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+    overflow-x: hidden;
+    cursor: none;
+  }
+  /* 自定义光标模式下，隐藏系统光标 */
+  a, button, input, textarea, [role="button"] { cursor: none !important; }
+  img, video { display: block; max-width: 100%; }
+  section { position: relative; z-index: 10; width: 100%; max-width: 1024px; margin: 0 auto; padding: 112px 24px; }
+
+  /* 自定义光标 */
+  .cursor-dot, .cursor-ring {
+    position: fixed; top: 0; left: 0;
+    pointer-events: none; z-index: 9999; border-radius: 50%;
+  }
+  .cursor-dot { width: 6px; height: 6px; background: #fff; mix-blend-mode: difference; }
+  .cursor-ring { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,0.6); mix-blend-mode: difference; }
+  @media (pointer: coarse) { .cursor-dot, .cursor-ring { display: none; } body { cursor: auto !important; } }
+
+  /* 液体玻璃卡片 */
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.12), 0 20px 40px rgba(0,0,0,0.5);
+    position: relative;
+  }
+  .liquid-glass::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.3), rgba(255,255,255,0));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+  }
+  .nav-glass { background: rgba(17,24,39,0.55); backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%); }
+
+  /* 滚动入场动画 */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.in-view { opacity: 1; transform: none; }
+
+  /* 通用区块标题 */
+  .sec-head { margin-bottom: 56px; }
+  .sec-title { font-family: var(--font-serif); font-size: 36px; letter-spacing: -0.02em; }
+  .sec-sub { color: rgba(255,255,255,0.5); margin-top: 12px; font-size: 16px; }
+
+  /* ============================================================
+     背景壁纸（本地海报帧，秒开）+ 背景视频（远程 HLS 流，增强叠加）
+     ============================================================ */
+  /* 本地压缩 WebP 海报帧：页面加载即渲染，离线/差网也保证 1s 内出图；
+     视频未就绪时作为最终背景，视频就绪后淡出让位给视频。
+     注意：渐变层必须全部半透明，否则会盖住下方的海报帧 */
+  .bg-poster {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(99,102,241,0.18), transparent 60%),
+      radial-gradient(900px 500px at 0% 60%, rgba(167,139,250,0.12), transparent 60%),
+      linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.5)),
+      url('./src/assets/images/bg-poster.webp') center / cover no-repeat;
+    transition: opacity 0.8s ease;
+  }
+  .bg-video {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0; pointer-events: none;
+  }
+  .bg-overlay { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,0.35); pointer-events: none; }
+
+  /* ============================================================
+     Splash 启动页
+     ============================================================ */
+  .splash {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
+    background: rgba(0,0,0,0.3); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    cursor: pointer; transition: opacity 0.7s ease;
+  }
+  .splash::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0,0,0,0.4), transparent 40%, rgba(0,0,0,0.6));
+  }
+  .splash.hidden { opacity: 0; pointer-events: none; }
+  .splash h1 { font-family: var(--font-serif); font-size: 72px; letter-spacing: -0.02em; position: relative; z-index: 1; }
+  .splash .tag { color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; position: relative; z-index: 1; }
+  .splash .enter {
+    position: relative; z-index: 1; margin-top: 16px;
+    padding: 12px 32px; border: 1px solid rgba(255,255,255,0.2); border-radius: 999px;
+    color: rgba(255,255,255,0.6); font-size: 14px; letter-spacing: 0.2em;
+    transition: all 0.3s;
+  }
+  .splash:hover .enter { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+  .load-bar { width: 180px; height: 2px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; position: relative; z-index: 1; }
+  .load-bar i { display: block; height: 100%; width: 0; background: #fff; transition: width 0.3s; }
+
+  /* ============================================================
+     导航栏
+     ============================================================ */
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
+  .nav-bar {
+    border-radius: 999px; padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1024px; margin: 16px auto; position: relative; overflow: hidden;
+    animation: navIn 0.8s ease both;
+  }
+  @keyframes navIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
+  .nav-left { display: flex; align-items: center; gap: 32px; position: relative; z-index: 1; }
+  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; }
+  .nav-links { display: flex; align-items: center; gap: 32px; font-size: 16px; font-weight: 500; }
+  .nav-links button { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 16px; transition: color 0.3s; }
+  .nav-links button:hover, .nav-links button.active { color: #fff; }
+  .nav-right { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
+  .nav-btn { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 14px; display: flex; align-items: center; gap: 6px; transition: color 0.3s; }
+  .nav-btn:hover { color: #fff; }
+  /* 增大音乐按钮点击/命中范围：横纵各扩 10px（负外边距抵消，不改变布局占位） */
+  #audioToggle { margin: -10px; padding: 10px; }
+  /* 音乐状态指示器：白色音符 + 播放时"呼吸"动画 + 暂停/关闭时左上到右下斜杠 */
+  .note-indicator { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; }
+  .note-icon { width: 100%; height: 100%; fill: #fff; transform-origin: 50% 50%; animation: note-spin 6s linear infinite; }
+  /* 暂停/关闭：音符停止旋转、回到原位 */
+  .note-indicator.off .note-icon { animation: none; transform: rotate(0deg); }
+  /* 旋转动画：播放时音符持续匀速旋转 */
+  @keyframes note-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  /* 联系资料卡片平滑出现：上浮 + 淡入 + 轻微缩放 */
+  @keyframes cardPop { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: none; } }
+  .contact-card { animation: cardPop 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+  /* 斜杠覆盖层：播放时隐藏，暂停/关闭时淡入 */
+  .note-slash { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s ease; }
+  .note-indicator.off .note-slash { opacity: 1; }
+  .note-slash::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom right,
+      transparent calc(50% - 0.5px),
+      #fff calc(50% - 0.5px),
+      #fff calc(50% + 0.5px),
+      transparent calc(50% + 0.5px));
+  }
+  @media (max-width: 768px) { .nav-links { display: none; } }
+
+  /* 招聘官看板（侧边悬浮） */
+  .recruiter-bar {
+    position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 40;
+    background: #fff; color: #000; padding: 8px 12px; border-radius: 0 12px 12px 0;
+    box-shadow: 0 0 15px rgba(255,255,255,0.25); border: none; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.1em; writing-mode: vertical-rl; cursor: none;
+    transition: padding 0.3s;
+  }
+  .recruiter-bar:hover { padding-right: 16px; }
+
+  /* ============================================================
+     Hero
+     ============================================================ */
+  .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 32px; padding-top: 100px; }
+  .hero h1 {
+    font-family: var(--font-serif); font-weight: 400;
+    font-size: clamp(72px, 12vw, 192px); line-height: 1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #fff, rgba(255,255,255,0.9) 60%, rgba(255,255,255,0.5));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    animation: fadeUp 0.8s 0.1s both;
+  }
+  .hero .uni { color: rgba(255,255,255,0.7); font-size: clamp(14px, 2vw, 28px); font-weight: 500; letter-spacing: 0.25em; text-transform: uppercase; animation: fadeUp 0.8s 0.2s both; }
+  /* 座右铭滚动区：固定高度窗口 + 纵向轨道滑动，每 2 秒滚动一行 */
+  .hero .rotating {
+    height: 104px; overflow: hidden;
+    display: flex; align-items: flex-start; justify-content: center;
+  }
+  .hero .rotating-track {
+    display: flex; flex-direction: column;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hero .rotating-track p {
+    height: 104px; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-serif); font-size: clamp(40px, 6vw, 72px); line-height: 1.08; letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #fff, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.6));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  @media (max-width: 720px) {
+    .hero .rotating, .hero .rotating-track p { height: 60px; }
+    .hero .rotating-track p { font-size: 40px; }
+  }
+  .hero .desc { color: rgba(255,255,255,0.7); max-width: 640px; font-size: 17px; line-height: 1.8; animation: fadeUp 0.8s 0.6s both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+  .hero-btns { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 16px; animation: fadeUp 0.8s 0.8s both; }
+  .pill-btn {
+    border-radius: 999px; padding: 12px 24px; border: none;
+    background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.85);
+    font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;
+    transition: transform 0.3s, color 0.3s; text-decoration: none;
+  }
+  .pill-btn:hover { transform: scale(1.05); color: #fff; }
+  .hero-input { display: flex; align-items: center; }
+  .hero-input input {
+    border-radius: 999px; padding: 12px 24px; min-width: 300px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; font-size: 16px; outline: none;
+  }
+  .hero-input input::placeholder { color: rgba(255,255,255,0.5); }
+  .contact-card { border-radius: 16px; padding: 24px 28px; max-width: 420px; width: 100%; text-align: left; }
+  .contact-card h3 { font-weight: 500; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  /* 头像 + 联系信息 横向协调布局 */
+  .contact-card .contact-body { display: flex; align-items: center; gap: 20px; }
+  .contact-card .contact-avatar {
+    width: 104px; height: 104px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.18);
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.35);
+    background: rgba(255,255,255,0.06);
+  }
+  .contact-card .contact-rows { flex: 1; min-width: 0; }
+  .contact-card .row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; padding: 7px 0; }
+  .contact-card .row .k { color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 8px; }
+  .contact-card .row .v { font-family: ui-monospace, monospace; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .contact-card .copy-btn { background: none; border: none; color: rgba(255,255,255,0.3); }
+  .contact-card .copy-btn:hover { color: #fff; }
+  .contact-card .copy-btn.ok { color: #4ade80; }
+  /* 窄屏：头像与信息改为纵向堆叠 */
+  @media (max-width: 480px) {
+    .contact-card { padding: 20px; }
+    .contact-card .contact-body { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .contact-card .contact-avatar { width: 88px; height: 88px; }
+  }
+
+  /* ============================================================
+     能力雷达图
+     ============================================================ */
+  .radar-wrap { display: flex; justify-content: center; }
+  .radar-svg { width: 100%; max-width: 576px; overflow: visible; }
+
+  /* ============================================================
+     AI 实战作品（项目卡片）
+     ============================================================ */
+  .proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  @media (max-width: 768px) { .proj-grid { grid-template-columns: 1fr; } }
+  .proj-card { height: 256px; border-radius: 16px; overflow: hidden; position: relative; cursor: none; }
+  /* 注意：glow / shot / info 均不使用 z-index，仅靠 DOM 顺序（info 最后渲染在最上）。
+     若给 .info 加 z-index 会创建 stacking context，把 .t 的 mix-blend-mode 隔离在
+     透明背景内，导致实时反色失效（这正是之前"并未好转"的根因）。 */
+  .proj-card .glow {
+    position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.75) 45%, rgba(255,255,255,0.35) 100%);
+  }
+  .proj-card .shot {
+    position: absolute; inset: 0; opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .proj-card:hover .glow, .proj-card:hover .shot { opacity: 1; }
+  .proj-card .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .proj-card .info { position: absolute; inset: 0; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+  .proj-card .num {
+    align-self: flex-start; font-family: ui-monospace, monospace; font-size: 16px;
+    padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.08);
+    color: #fff; transition: opacity 0.3s;
+  }
+  /* 默认白色字体（阴影保证深底可读）；hover 图片出现时文字同步淡出 */
+  .proj-card .t {
+    font-size: 24px; font-weight: 500; color: #fff;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.5);
+    transition: opacity 0.3s;
+  }
+  .proj-card .ext { position: absolute; top: 24px; right: 24px; z-index: 4; color: #fff; font-size: 22px; pointer-events: none; transition: opacity 0.3s; }
+  .proj-card:hover .num, .proj-card:hover .t, .proj-card:hover .ext { opacity: 0; }
+  /* 移动端（无 hover 设备）：滚动到哪个卡片，哪个卡片就翻动显示图片，
+     避免需长按才看图的弊端。桌面端保持原 hover 交互不受影响。 */
+  @media (hover: none) {
+    .proj-card { perspective: 800px; }
+    .proj-card .shot {
+      transform: rotateY(-90deg); transform-origin: left center;
+      transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .proj-card.in-view .shot { opacity: 1; transform: rotateY(0deg); }
+    .proj-card.in-view .num, .proj-card.in-view .t, .proj-card.in-view .ext { opacity: 0; }
+  }
+
+  /* ============================================================
+     PPT 轮播
+     ============================================================ */
+  .swiper-wrap { position: relative; border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.03); }
+  .swiper-track { display: flex; transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1); }
+  .swiper-slide { flex: 0 0 100%; position: relative; aspect-ratio: 16 / 9; }
+  .swiper-slide img { width: 100%; height: 100%; object-fit: cover; }
+  .swiper-slide .cap {
+    position: absolute; left: 24px; bottom: 24px; z-index: 3;
+    padding: 10px 18px; border-radius: 999px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 14px;
+  }
+  /* 底部渐变信息条（与原版一致） */
+  .swiper-slide::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.55));
+    pointer-events: none; z-index: 1;
+  }
+  .swiper-tools { position: absolute; right: 16px; bottom: 16px; z-index: 5; display: flex; gap: 8px; }
+  .swiper-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
+    color: #fff; font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: background 0.3s;
+  }
+  .swiper-btn:hover { background: rgba(255,255,255,0.2); }
+  .swiper-dots { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; z-index: 4; }
+  .swiper-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.3s; }
+  .swiper-dots i.on { background: #fff; transform: scale(1.3); }
+  .swiper-info { position: absolute; left: 24px; top: 24px; z-index: 2; pointer-events: none; }
+  .swiper-info .n { font-family: ui-monospace, monospace; font-size: 14px; color: rgba(255,255,255,0.7); }
+
+  /* ============================================================
+     求学之路 & 荣誉认证
+     ============================================================ */
+  .edu-card { border-radius: 16px; padding: 32px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+  .edu-card img { width: 80px; height: 80px; border-radius: 12px; object-fit: cover; }
+  .edu-card h3 { font-size: 20px; font-weight: 500; }
+  .edu-card .tag211 { color: #60a5fa; font-family: ui-monospace, monospace; font-size: 14px; margin-left: 4px; }
+  .edu-card .muted { color: rgba(255,255,255,0.4); font-size: 16px; margin-top: 8px; font-family: ui-monospace, monospace; }
+  .cert-list { display: flex; flex-direction: column; gap: 24px; }
+  .cert-card { border-radius: 16px; padding: 24px; display: grid; grid-template-columns: 2fr 3fr; gap: 20px 40px; align-items: center; }
+  @media (max-width: 640px) { .cert-card { grid-template-columns: 1fr; } }
+  .cert-card h3 { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+  .cert-card .muted { color: rgba(255,255,255,0.4); font-size: 13px; margin-bottom: 4px; font-family: ui-monospace, monospace; word-break: break-all; }
+  .cert-card .org { color: rgba(255,255,255,0.7); font-size: 15px; margin-bottom: 4px; }
+  .cert-card img { border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); width: 100%; box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
+
+  /* ============================================================
+     独特之处
+     ============================================================ */
+  .uf-block { margin-bottom: 56px; }
+  .uf-title { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+  .uf-title .ico { color: rgba(167,139,250,0.8); }
+  .uf-title h3 { font-family: var(--font-serif); font-size: 30px; }
+  .uf-title span { color: rgba(255,255,255,0.3); font-size: 14px; margin-left: 8px; }
+  .uf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .uf-grid.col3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 768px) { .uf-grid, .uf-grid.col3 { grid-template-columns: 1fr; } }
+  .uf-card { border-radius: 16px; overflow: hidden; }
+  .uf-card .media { aspect-ratio: 4 / 3; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .uf-card.col3 .media { aspect-ratio: 3 / 4; }
+  .uf-card.hobby .media { aspect-ratio: 16 / 9; }
+  .uf-card .media img, .uf-card .media video { width: 100%; height: 100%; object-fit: cover; }
+  .uf-card .body { padding: 20px; }
+  .uf-card h4 { font-size: 17px; font-weight: 500; margin-bottom: 8px; }
+  .uf-card .desc { color: rgba(255,255,255,0.6); font-size: 14px; line-height: 1.7; }
+  .uf-card .sub { color: rgba(255,255,255,0.4); font-size: 12px; margin-bottom: 8px; }
+  .uf-card .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .uf-card .tags span { padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 12px; }
+  .uf-card .badge-green { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); color: rgba(74,222,128,0.8); font-size: 12px; margin-top: 10px; }
+  .uf-card .badge-dark { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); font-size: 12px; margin-top: 10px; }
+  /* 特别感谢 */
+  .thanks-card { border-radius: 16px; padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+  .thanks-card .ico-heart { font-size: 28px; color: rgba(248,113,113,0.8); }
+  .thanks-card p { color: rgba(255,255,255,0.8); font-size: 15px; line-height: 1.9; max-width: 640px; }
+  .thanks-card .thanks-divider { margin-top: 8px; display: flex; align-items: center; gap: 12px; color: rgba(248,113,113,0.5); font-size: 13px; letter-spacing: 0.3em; }
+  .thanks-card .thanks-divider::before, .thanks-card .thanks-divider::after { content: ""; width: 32px; height: 1px; background: rgba(248,113,113,0.3); }
+
+  /* ============================================================
+     页脚
+     ============================================================ */
+  footer { position: relative; z-index: 10; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 96px; }
+  .footer-in { max-width: 1024px; margin: 0 auto; padding: 64px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+  .footer-in h3 { font-family: var(--font-serif); font-size: 24px; }
+  .footer-in p { color: rgba(255,255,255,0.5); font-size: 16px; margin-top: 4px; }
+  .footer-links { display: flex; align-items: center; gap: 24px; font-size: 15px; }
+  .footer-links a { color: rgba(255,255,255,0.5); text-decoration: none; transition: color 0.3s; display: inline-flex; align-items: center; gap: 6px; }
+  .footer-links a:hover { color: #fff; }
+  /* 白色描边简洁图标 */
+  .icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ============================================================
+     AI 数字分身抽屉
+     ============================================================ */
+  .ai-overlay {
+    position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,0.6);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .ai-overlay.open { opacity: 1; pointer-events: auto; }
+  .ai-drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 420px; max-width: 92vw; z-index: 95;
+    background: #0b0d13; border-left: 1px solid rgba(255,255,255,0.1);
+    display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.35s ease;
+  }
+  .ai-drawer.open { transform: none; }
+  .ai-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .ai-head .name { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+  .ai-head .name .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+  .ai-close { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 22px; }
+  .ai-close:hover { color: #fff; }
+  .ai-msgs { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .ai-msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+  .ai-msg.bot { align-self: flex-start; background: rgba(255,255,255,0.06); border-bottom-left-radius: 4px; }
+  .ai-msg.me { align-self: flex-end; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-bottom-right-radius: 4px; }
+  .ai-msg.typing { color: rgba(255,255,255,0.4); }
+  .ai-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 24px 8px; }
+  .ai-chip {
+    padding: 6px 14px; border-radius: 999px; font-size: 13px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.8);
+    transition: all 0.3s;
+  }
+  .ai-chip:hover { background: rgba(99,102,241,0.25); border-color: rgba(99,102,241,0.6); }
+  .ai-input-row { display: flex; align-items: center; gap: 10px; padding: 16px 24px 24px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .ai-input-row input {
+    flex: 1; border-radius: 999px; padding: 12px 20px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; font-size: 14px; outline: none;
+  }
+  .ai-input-row input::placeholder { color: rgba(255,255,255,0.35); }
+  .ai-send {
+    width: 42px; height: 42px; border-radius: 50%; border: none; flex: 0 0 42px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; transition: transform 0.2s;
+  }
+  .ai-send:hover { transform: scale(1.08); }
+
+  /* ============================================================
+     全景项目演示（发牌动画）
+     ============================================================ */
+  .deal-overlay {
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.95); backdrop-filter: blur(20px);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .deal-overlay.open { opacity: 1; pointer-events: auto; }
+  .deal-overlay .persp { perspective: 1200px; perspective-origin: 50% 50%; display: flex; align-items: center; justify-content: center; position: relative; }
+  .deal-title { position: absolute; top: 32px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.5s 0.3s; }
+  .deal-overlay.open .deal-title { opacity: 1; }
+  .deal-title h2 { font-family: var(--font-serif); font-size: 24px; white-space: nowrap; }
+  .deal-title p { color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 4px; }
+  .deal-card {
+    position: absolute; left: 50%; top: 50%; overflow: hidden; border-radius: 12px;
+    transform: translate(-50%, -50%) scale(0.9); opacity: 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    transition: transform 1s cubic-bezier(0.34, 1.2, 0.4, 1), opacity 0.4s, box-shadow 0.3s;
+    text-decoration: none; color: #fff;
+  }
+  .deal-card:hover { box-shadow: 0 0 32px rgba(99,102,241,0.55); }
+  .deal-card img { width: 100%; height: 100%; object-fit: cover; }
+  .deal-card .tag { position: absolute; left: 10px; bottom: 10px; font-size: 12px; background: rgba(0,0,0,0.55); padding: 4px 10px; border-radius: 999px; }
+  .deal-overlay .close-hint { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 13px; }
+
+  /* ============================================================
+     响应式微调 / 打印
+     ============================================================ */
+  @media (max-width: 720px) {
+    section { padding: 80px 16px; }
+    .hero h1 { font-size: 88px; }
+    .splash h1 { font-size: 56px; }
+    .hero .rotating p { font-size: 44px; }
+  }
+  @media print {
+    @page { size: A4; margin: 12mm 14mm; }
+    html, body { background: #fff !important; color: #1a1a1a !important; overflow: visible !important; cursor: auto !important; }
+    * { cursor: auto !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    /* 消除入场/滚动动画残留（opacity:0 / 位移 / 模糊） */
+    * { opacity: 1 !important; transform: none !important; filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; animation: none !important; transition: none !important; box-shadow: none !important; }
+    /* 隐藏悬浮层、媒体与交互控件（视频由 beforeprint 用海报图替代） */
+    .cursor-dot, .cursor-ring, .bg-video, .bg-overlay, .splash, nav, .recruiter-bar, .ai-overlay, .ai-drawer, .deal-overlay, .swiper-tools, video, audio, button, input, textarea, select { display: none !important; }
+    /* 背景图不打印 */
+    [class*="bg-"] { background-image: none !important; }
+    img { max-width: 100% !important; }
+    /* 文字统一深色系，标题不孤悬页尾 */
+    h1, h2, h3, h4 { color: #111 !important; break-after: avoid; page-break-after: avoid; }
+    .sec-title { font-size: 22px !important; margin-bottom: 8px !important; }
+    .uf-title h3 { font-size: 20px !important; }
+    p, div, span, a { color: #333 !important; }
+    /* Hero 首屏：标题放大居中，座右铭三句同时显示（字号为名字的一半） */
+    .hero h1, .hero .rotating-track p { background: none !important; -webkit-text-fill-color: #111 !important; }
+    .hero h1 { font-size: 88px !important; line-height: 1.1 !important; }
+    .hero .uni { font-size: 18px !important; }
+    .hero .rotating { height: auto !important; overflow: visible !important; }
+    .hero .rotating-track { transform: none !important; }
+    .hero .rotating-track p { height: auto !important; font-size: 44px !important; line-height: 1.15 !important; padding: 2px 0; }
+    .proj-card .t, .proj-card .num, .proj-card .ext { color: #111 !important; text-shadow: none !important; }
+    /* 能力雷达图：深色文字与网格线 */
+    .radar-svg text { fill: #333 !important; }
+    .radar-svg line[stroke*="255,255,255"], .radar-svg polygon[stroke*="255,255,255"] { stroke: #d4d4d4 !important; }
+    .radar-svg polygon[fill*="99,102,241"] { fill: rgba(79,70,229,0.12) !important; stroke: #4338ca !important; }
+    /* 视频打印时用 beforeprint 注入的海报图替代 */
+    .print-video-fallback { display: block !important; width: 100% !important; height: 100% !important; object-fit: cover !important; }
+    /* 液体玻璃卡片：浅底细边框，形成清晰层次 */
+    .liquid-glass { background: #fafafa !important; border: 1px solid #e3e3e3 !important; box-shadow: none !important; }
+    /* 卡片与图片不跨页断裂 */
+    .liquid-glass, .swiper-slide, .cert-card, .edu-card, .proj-card { break-inside: avoid; page-break-inside: avoid; }
+    /* PPT 演示文稿：全部幻灯片缩小为 2 列并排，避免一图一页 */
+    .swiper-wrap { overflow: visible !important; height: auto !important; background: none !important; }
+    .swiper-track { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; transform: none !important; }
+    .swiper-slide { position: static !important; flex: none !important; width: 100% !important; height: auto !important; aspect-ratio: auto !important; margin-bottom: 0 !important; background: #fff !important; }
+    .swiper-slide img { object-fit: contain !important; }
+    .swiper-slide .cap, .swiper-slide::after { display: none !important; }
+    .swiper-info, .swiper-dots { display: none !important; }
+    /* AI 实战作品：四窗格 2x2 放入一页 */
+    .proj-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; break-inside: avoid; page-break-inside: avoid; }
+    .proj-card { height: 150px !important; }
+    /* 独特之处：保持多列并排，各子板块各自成页（标题随首块同页，避免空白页） */
+    #ufBlocks > div { break-inside: avoid; page-break-inside: avoid; }
+    #ufBlocks > div + div { break-before: page; page-break-before: always; }
+    .uf-block { margin-bottom: 0 !important; }
+    /* 荣誉认证：2 列并排缩小，卡片内图文纵向排列 */
+    .cert-list { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    .cert-card { grid-template-columns: 1fr !important; gap: 10px !important; padding: 16px !important; }
+    /* 布局：压缩间距、仅大板块另起一页 */
+    section { padding: 18px 0 !important; }
+    .sec-head { margin-bottom: 24px !important; }
+    .hero { min-height: auto !important; padding-top: 0 !important; gap: 14px !important; }
+    #skills, #projects, #presentation, #education, #unique, #contact { break-before: page; page-break-before: always; }
+    footer { margin-top: 8px !important; }
+    .footer-in { padding: 16px 0 !important; }
+    .footer-links { flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; }
+    footer a::after { content: " (" attr(href) ")"; font-size: 9px; color: #666; word-break: break-all; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 自定义光标 -->
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- 背景壁纸（本地 WebP 海报帧：压缩小、秒开；离线/差网时保证 1s 内出图） -->
+<div class="bg-poster" id="bgPoster"></div>
+<!-- 背景视频（远程 HLS 流，联网自动播放；poster 属性作为首帧前的原生兜底） -->
+<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="none" poster="./src/assets/images/bg-poster.webp"></video>
+<div class="bg-overlay"></div>
+
+<!-- BGM 音频（双码率自适应） -->
+<audio id="bgm" loop preload="none"></audio>
+
+<!-- ==================== Splash 启动页 ==================== -->
+<div class="splash" id="splash">
+  <h1>高晟哲</h1>
+  <p class="tag">Jimmy Gao · Portfolio</p>
+  <div class="load-bar"><i id="loadBar"></i></div>
+  <div class="enter">点击进入</div>
+</div>
+
+<!-- ==================== 导航栏 ==================== -->
+<nav>
+  <div class="nav-bar liquid-glass nav-glass" id="navBar">
+    <!-- 鼠标追踪光斑 -->
+    <div class="nav-glow" id="navGlow" style="position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(100px circle at 50% 50%, rgba(255,255,255,0.12), transparent 70%);transition:opacity .3s;"></div>
+    <div class="nav-left">
+      <div class="nav-brand">🌐 高晟哲</div>
+      <div class="nav-links" id="navLinks">
+        <button data-target="skills">技术栈</button>
+        <button data-target="projects">AI实战作品</button>
+        <button data-target="education">求学之路</button>
+        <button data-target="certificates">荣誉认证</button>
+        <button data-target="unique">独特之处</button>
+        <button data-target="contact">联系方式</button>
+      </div>
+    </div>
+    <div class="nav-right">
+      <button class="nav-btn" id="audioToggle" title="背景音效" aria-pressed="true" aria-label="背景音乐：播放中">
+        <span class="note-indicator on" id="noteIndicator">
+          <svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <!-- 两个八分音符符头（旋转椭圆）+ 双符干 + 单符梁＝一对连体八分音符 -->
+            <ellipse cx="7.5" cy="17.5" rx="3.6" ry="2.8" transform="rotate(-20 7.5 17.5)"/>
+            <ellipse cx="16.5" cy="14.5" rx="3.6" ry="2.8" transform="rotate(-20 16.5 14.5)"/>
+            <rect x="10" y="5.2" width="1.3" height="10.6"/>
+            <rect x="18" y="2.2" width="1.3" height="10.6"/>
+            <path d="M10 5.2 19.3 2.2 19.3 4.4 10 7.4z"/>
+          </svg>
+          <span class="note-slash" aria-hidden="true"></span>
+        </span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- 招聘官看板 -->
+<button class="recruiter-bar" onclick="scrollToSection('contact')">招聘官看板</button>
+
+<main>
+  <!-- ==================== Hero ==================== -->
+  <section class="hero">
+    <h1>高晟哲</h1>
+    <p class="uni">Taiyuan University of Technology · IoT Engineering</p>
+    <div class="rotating" id="rotating">
+      <div class="rotating-track" id="rotatingTrack">
+        <p>系统化逻辑思维</p>
+        <p>永远谦卑</p>
+        <p>永远进步</p>
+      </div>
+    </div>
+    <p class="desc">太原理工大学物联网工程本科大一新生。对人工智能应用具有高度热情，擅长运用多模型大语言模型协同工作流。</p>
+    <div class="hero-btns" id="heroBtns">
+      <button class="pill-btn liquid-glass" onclick="openAI()"><svg class="icon" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1"/><path d="M9 12.5h.01M15 12.5h.01"/><path d="M9.5 15.5h5"/><path d="M2.5 11v4M21.5 11v4"/></svg>与 AI 数字分身对话</button>
+      <button class="pill-btn liquid-glass" id="contactBtn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 8 9 6 9-6"/></svg>获取联系资料</button>
+      <a class="pill-btn liquid-glass" href="./public/resume.pdf" download="高晟哲-简历.pdf"><svg class="icon" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 20h14"/></svg>下载 PDF 简历</a>
+      <button class="pill-btn liquid-glass" onclick="openDeal()"><svg class="icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>播放全景项目演示</button>
+    </div>
+    <!-- 获取联系资料：输入框（默认隐藏，占位符打字效果，与原版一致） -->
+    <div class="hero-input" id="contactInput" style="display:none;">
+      <input id="emailInput" type="text" placeholder="" />
+    </div>
+    <!-- 联系资料卡片（默认隐藏） -->
+    <div id="contactCard" style="display:none;" class="contact-card liquid-glass"></div>
+  </section>
+
+  <!-- ==================== 技术栈 / 雷达图 ==================== -->
+  <section id="skills" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">AI 能力雷达图</h2>
+      <p class="sec-sub">AI Capability Radar</p>
+    </div>
+    <div class="radar-wrap">
+      <svg class="radar-svg" id="radar" viewBox="0 0 560 480"></svg>
+    </div>
+  </section>
+
+  <!-- ==================== AI 实战作品 ==================== -->
+  <section id="projects" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">AI实战作品</h2>
+      <p class="sec-sub">Interactive Web Experiences</p>
+    </div>
+    <div class="proj-grid" id="projGrid"></div>
+  </section>
+
+  <!-- ==================== PPT 演示文稿 ==================== -->
+  <section id="presentation" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">演示文稿 · Freshman's Dilemma</h2>
+      <p class="sec-sub">The Paralysis of Choice</p>
+    </div>
+    <div class="swiper-wrap" id="pptWrap">
+      <div class="swiper-track" id="pptTrack"></div>
+      <div class="swiper-info"><span class="n" id="pptNum">01 / 06</span></div>
+      <div class="swiper-dots" id="pptDots"></div>
+      <div class="swiper-tools">
+        <button class="swiper-btn" id="pptPlay" title="播放/暂停">⏸</button>
+        <button class="swiper-btn" id="pptPrev">‹</button>
+        <button class="swiper-btn" id="pptNext">›</button>
+        <button class="swiper-btn" id="pptFull" title="全屏">⛶</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 求学之路 & 荣誉认证 ==================== -->
+  <section id="education" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">求学之路</h2>
+    </div>
+    <div class="edu-card liquid-glass">
+      <img src="./src/assets/images/images.png" alt="太原理工大学" loading="lazy" decoding="async" />
+      <h3>太原理工大学 <span class="tag211">211 双一流</span></h3>
+      <p style="color:rgba(255,255,255,0.7);">物联网工程 / 本科在读</p>
+      <p class="muted">2026.9 - 2030.6（预计）</p>
+    </div>
+  </section>
+
+  <section id="certificates" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">荣誉认证</h2>
+    </div>
+    <div class="cert-list" id="certList"></div>
+  </section>
+
+  <!-- ==================== 独特之处 ==================== -->
+  <section id="unique" class="reveal">
+    <div class="sec-head">
+      <div class="uf-title" style="margin-bottom:8px;">
+        <span class="ico">✦</span><span style="color:rgba(167,139,250,0.7);font-size:13px;letter-spacing:.25em;text-transform:uppercase;">Unique Features</span>
+      </div>
+      <h2 class="sec-title">独特之处</h2>
+      <p class="sec-sub">跨界能力 · 全面发展</p>
+    </div>
+    <div id="ufBlocks"></div>
+  </section>
+</main>
+
+<!-- ==================== 页脚 ==================== -->
+<footer id="contact">
+  <div class="footer-in">
+    <div>
+      <h3>Jimmy Gao</h3>
+      <p>IoT Engineering · Full Stack AI</p>
+    </div>
+    <div class="footer-links">
+      <a href="tel:19229770095"><svg class="icon" viewBox="0 0 24 24"><path d="M5 4h3l2 5-2 1.5a12 12 0 0 0 5.5 5.5L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>19229770095</a>
+      <a href="mailto:wzgsz2008@foxmail.com"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 8 9 6 9-6"/></svg>Email</a>
+      <a href="https://github.com/jiostrider" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2.5C7 2.5 3 6.5 3 11.7c0 4 2.6 7.5 6.2 8.7.5.1.6-.2.6-.4v-1.5c-2.5.5-3-1.2-3-1.2-.4-1-1-1.3-1-1.3-.8-.6.1-.6.1-.6.9.1 1.4.9 1.4.9.8 1.4 2.1 1 2.6.8.1-.6.3-1 .6-1.3-2-.2-4-.9-4-4.2 0-.9.3-1.7.9-2.3-.1-.2-.4-1.1.1-2.2 0 0 .7-.2 2.3.9a7.8 7.8 0 0 1 4.2 0c1.6-1.1 2.3-.9 2.3-.9.5 1.1.2 2 .1 2.2.6.6.9 1.4.9 2.3 0 3.3-2 4-4 4.2.3.3.6.9.6 1.7v2.5c0 .2.1.5.6.4a9 9 0 0 0 6.2-8.7C21 6.5 17 2.5 12 2.5z"/></svg>GitHub</a>
+      <a href="https://www.linkedin.com/in/%E6%99%9F%E5%93%B2-%E9%AB%98-62503742a/" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4"/></svg>LinkedIn</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ==================== AI 数字分身抽屉 ==================== -->
+<div class="ai-overlay" id="aiOverlay"></div>
+<aside class="ai-drawer" id="aiDrawer">
+  <div class="ai-head">
+    <div class="name"><span class="dot"></span> Jimmy · AI 数字分身</div>
+    <button class="ai-close" onclick="closeAI()">✕</button>
+  </div>
+  <div class="ai-msgs" id="aiMsgs"></div>
+  <div class="ai-chips" id="aiChips"></div>
+  <div class="ai-input-row">
+    <input id="aiInput" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter')sendAI()" />
+    <button class="ai-send" onclick="sendAI()">➤</button>
+  </div>
+</aside>
+
+<!-- ==================== 全景项目演示（发牌） ==================== -->
+<div class="deal-overlay" id="dealOverlay" onclick="if(event.target===this)closeDeal()">
+  <div class="deal-title">
+    <h2>全景项目演示</h2>
+    <p>Panoramic Project Demo</p>
+  </div>
+  <div class="persp" id="dealPersp"></div>
+  <div class="close-hint">点击空白处关闭</div>
+</div>
+
+<!-- ==================== hls.js（CDN，联网时加载） ==================== -->
+<script async src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" onload="scheduleBgVideo()"></script>
+<script>
+/* ============================================================
+   工具函数
+   ============================================================ */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const top = el.getBoundingClientRect().top + window.scrollY - 80;
+  window.scrollTo({ top, behavior: 'smooth' });
+}
+
+/* ============================================================
+   自定义光标（点即时跟手 + 圆环延迟，与原版一致）
+   ============================================================ */
+(function initCursor() {
+  const dot = $('#cursorDot'), ring = $('#cursorRing');
+  const target = { x: -100, y: -100 };
+  const ringPos = { x: -100, y: -100 };
+  let raf = 0;
+  document.addEventListener('mousemove', (e) => {
+    target.x = e.clientX; target.y = e.clientY;
+    dot.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 3}px)`;
+  });
+  function animate() {
+    ringPos.x += (target.x - ringPos.x) * 0.08;
+    ringPos.y += (target.y - ringPos.y) * 0.08;
+    ring.style.transform = `translate(${ringPos.x - 16}px, ${ringPos.y - 16}px)`;
+    raf = requestAnimationFrame(animate);
+  }
+  // 内存/主线程优化：页面隐藏时暂停 rAF 循环，回到前台再恢复
+  document.addEventListener('visibilitychange', () => {
+    cancelAnimationFrame(raf);
+    if (!document.hidden) raf = requestAnimationFrame(animate);
+  });
+  raf = requestAnimationFrame(animate);
+})();
+
+/* ============================================================
+   Splash：图片预加载进度 + 点击进入
+   ============================================================ */
+(function initSplash() {
+  const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
+  // Splash 显示期间锁定页面滚动
+  document.body.style.overflow = 'hidden';
+
+  // 根据网络情况决定最长加载等待：差网多等（6s），好网少等（3s）
+  const MAX_WAIT = networkTier() === 'poor' ? 6000 : 3000;
+  const start = performance.now();
+  const ENTER_TEXT = '点击进入';    // 按钮就绪文案
+  const LOADING_TEXT = '加载中';    // 按钮加载文案（末尾省略号动态追加）
+  let posterReady = false, posterFailed = false;
+  let videoReady = false, audioReady = false, entered = false;
+  let dotsTimer = null, dotsCount = 0; // “加载中...” 动态省略号定时器/点数
+  let t = null;
+
+  // ① 背景海报帧（本地压缩 WebP，约 37KB）：显式预加载，并精确检测“完全加载显现”
+  const poster = new Image();
+  const markPosterReady = () => { if (!posterReady) { posterReady = true; onReady(); } };
+  poster.onload = markPosterReady;                            // 加载成功 → 背景已完全加载
+  poster.onerror = () => { posterFailed = true; onReady(); }; // 失败 → 渐变底兜底，仍可进入
+  poster.src = './src/assets/images/bg-poster.webp';
+  if (poster.complete && poster.naturalWidth > 0) markPosterReady(); // 命中浏览器缓存时同步判定
+
+  // ② 背景视频（远程 HLS）：后台加载，就绪后叠加播放（增强项，不阻塞进入）
+  const bgVideo = $('#bgVideo');
+  bgVideo.addEventListener('canplay', () => { videoReady = true; onReady(); });
+  bgVideo.addEventListener('playing', () => { $('#bgPoster').style.opacity = '0'; });
+  scheduleBgVideo(); // 差网延迟 4s 再起播，优先保证海报帧 + 音乐
+
+  // ③ 音乐（BGM）：本地双码率，Splash 期间即预加载，进入时点击手势下立即出声
+  const audio = $('#bgm');
+  audio.preload = 'auto';
+  audio.src = networkTier() === 'good' ? './src/assets/audio/bgm.mp3' : './src/assets/audio/bgm-low.mp3';
+  audio.load();
+  audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
+
+  // 进度条：海报帧 60% + 音频 20% + 视频 20%，与时间进度取较大值
+  (function fill() {
+    const tElapsed = Math.min(1, (performance.now() - start) / MAX_WAIT);
+    const ready = (posterReady ? 60 : 0) + (audioReady ? 20 : 0) + (videoReady ? 20 : 0);
+    bar.style.width = Math.max(ready, Math.round(tElapsed * 100)) + '%';
+    if (!entered) requestAnimationFrame(fill);
+  })();
+
+  // 背景图片“已完全加载显现”方可进入（加载失败则以渐变底兜底）
+  function canEnter() { return posterReady || posterFailed; }
+
+  // 点击进入：先检测背景图片是否加载完成；未完成则进入“加载中...”动态提示，
+  // 加载完成后按钮恢复“点击进入”，由用户再次点击执行进入
+  splash.addEventListener('click', () => {
+    if (canEnter()) enterSite();
+    else startDots();
+  });
+
+  // “加载中...”动态省略号：每 400ms 依次追加一个点，循环 0 → 1 → 2 → 3 → 0
+  function startDots() {
+    dotsCount = 0;
+    enter.textContent = LOADING_TEXT;
+    clearInterval(dotsTimer);
+    dotsTimer = setInterval(() => {
+      dotsCount = (dotsCount + 1) % 4;
+      enter.textContent = LOADING_TEXT + '...'.slice(0, dotsCount);
+    }, 400);
+  }
+  function stopDots() {
+    clearInterval(dotsTimer);
+    dotsTimer = null;
+    enter.textContent = ENTER_TEXT;
+  }
+
+  // 兜底：到 MAX_WAIT 无论如何放行（避免长时间卡在启动页）
+  t = setTimeout(() => enterSite(), MAX_WAIT);
+
+  function onReady() {
+    if (canEnter() && !entered) { clearTimeout(t); stopDots(); } // 背景就绪 → 恢复“点击进入”
+    if (entered && audioReady) bgmPlay(); // 已进入且音乐就绪：补起音乐
+  }
+
+  function enterSite() {
+    if (entered) return;
+    entered = true;
+    clearTimeout(t);
+    stopDots();
+    splash.classList.add('hidden');
+    document.body.style.overflow = '';
+    window.__entered = true;
+    bgmPlay(); // 音频已预加载，点击手势下立即出声
+  }
+})();
+
+/* ============================================================
+   背景视频：远程 MUX HLS 流（hls.js / Safari 原生）
+   - 壁纸保障：Splash 展示期间即开始缓冲/播放（muted 可自动播放），
+     用户进入时壁纸已就绪；加载失败时保持 CSS 渐变底（不黑屏）。
+   ============================================================ */
+var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
+var __bgVideoScheduled = false;
+// 差网延迟 4s 再起播视频：优先保证海报帧 + 音乐这两个本地资源，避免带宽竞争
+function scheduleBgVideo() {
+  if (__bgVideoScheduled) return;
+  __bgVideoScheduled = true;
+  const delay = networkTier() === 'poor' ? 4000 : 0;
+  setTimeout(() => { __bgVideoScheduled = false; initBgVideo(); }, delay);
+}
+function initBgVideo() {
+  if (__bgVideoStarted) return;
+  const video = $('#bgVideo');
+  if (!video) return;
+  const src = "https://stream.mux.com/kimF2ha9zLrX64H00UgLGPflCzNtl1T0215MlAmeOztv8.m3u8";
+  if (window.Hls && Hls.isSupported()) {
+    __bgVideoStarted = true;
+    const hls = new Hls({ enableWorker: true });
+    hls.loadSource(src);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    __bgVideoStarted = true;
+    video.src = src;
+    video.addEventListener('loadedmetadata', () => video.play().catch(() => {}));
+  }
+}
+
+/* ============================================================
+   BGM：双码率自适应 + 音乐开关
+   ============================================================ */
+const SRC_HIGH = './src/assets/audio/bgm.mp3';
+const SRC_LOW = './src/assets/audio/bgm-low.mp3';
+let audioOn = true;
+
+function networkTier() {
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!conn) return 'good';
+  if (['slow-2g', '2g', '3g'].includes(conn.effectiveType)) return 'poor';
+  if (conn.effectiveType === '4g' && conn.downlink < 1.5) return 'poor';
+  return 'good';
+}
+function bgmPlay() {
+  const audio = $('#bgm');
+  if (!audioOn) return;
+  // Splash 期间已设置源并预加载；这里不重复设置 src，避免重新缓冲
+  if (!audio.getAttribute('src')) audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW;
+  audio.volume = 1;
+  audio.play().catch(() => {});
+}
+$('#audioToggle').addEventListener('click', () => {
+  audioOn = !audioOn;
+  const audio = $('#bgm');
+  $('#noteIndicator').classList.toggle('off', !audioOn); // 暂停/关闭时显示斜杠、音符停止呼吸
+  const btn = $('#audioToggle'); // 同步无障碍状态
+  btn.setAttribute('aria-pressed', audioOn);
+  btn.setAttribute('aria-label', audioOn ? '背景音乐：播放中' : '背景音乐：已暂停，点击播放');
+  if (audioOn) { audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW; audio.play().catch(() => {}); }
+  else audio.pause();
+});
+
+/* ============================================================
+   导航栏：滚动高亮 + 鼠标追踪光斑
+   ============================================================ */
+(function initNav() {
+  const bar = $('#navBar'), glow = $('#navGlow');
+  bar.addEventListener('mousemove', (e) => {
+    const r = bar.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
+    glow.style.background = `radial-gradient(100px circle at ${x}% 50%, rgba(255,255,255,0.12), transparent 70%)`;
+    glow.style.opacity = 1;
+  });
+  bar.addEventListener('mouseleave', () => glow.style.opacity = 0);
+  $$('#navLinks button').forEach((b) =>
+    b.addEventListener('click', () => scrollToSection(b.dataset.target)));
+  // 滚动高亮
+  const ids = ['skills', 'projects', 'education', 'certificates', 'unique', 'contact'];
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) {
+        $$('#navLinks button').forEach((b) =>
+          b.classList.toggle('active', b.dataset.target === en.target.id));
+      }
+    });
+  }, { rootMargin: '-80px 0px -60% 0px' });
+  ids.forEach((id) => { const el = document.getElementById(id); if (el) io.observe(el); });
+})();
+
+/* ============================================================
+   Hero：打字机座右铭 + 联系资料卡片
+   ============================================================ */
+(function initHero() {
+  // 座右铭：纵向滚动式切换，每 2 秒滚动到下一句（滚动轨道方案）
+  const track = $('#rotatingTrack');
+  const rows = track.children;
+  let idx = 0;
+  setInterval(() => {
+    idx = (idx + 1) % rows.length;
+    track.style.transform = `translateY(${-idx * rows[0].offsetHeight}px)`;
+  }, 2000);
+
+  // 联系资料卡片
+  const card = $('#contactCard'), btn = $('#contactBtn');
+  const contacts = [
+    { k: '📞 电话', v: '19229770095', copy: '19229770095' },
+    { k: '✉️ Email', v: 'wzgsz2008@foxmail.com', copy: 'wzgsz2008@foxmail.com' },
+    { k: 'GitHub', v: 'jiostrider', href: 'https://github.com/jiostrider' },
+    { k: 'LinkedIn', v: '晟哲-高', href: 'https://www.linkedin.com/in/%E6%99%9F%E5%93%B2-%E9%AB%98-62503742a/' },
+  ];
+  card.innerHTML = `
+    <h3>联系方式 <span style="font-weight:400;"><button class="copy-btn" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:12px;" onclick="document.getElementById('contactCard').style.display='none'">关闭</button></span></h3>
+    <div class="contact-body">
+      <img class="contact-avatar" src="./src/assets/images/avatar.webp" alt="头像" />
+      <div class="contact-rows">
+        ${contacts.map((c) => `
+          <div class="row">
+            <span class="k">${c.k}</span>
+            <span class="v">
+              ${c.v}
+              ${c.href ? `<a href="${c.href}" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5);text-decoration:none;">↗</a>` : ''}
+              ${c.copy ? `<button class="copy-btn" data-copy="${c.copy}" onclick="copyText(this)">⧉</button>` : ''}
+            </span>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+  btn.addEventListener('click', () => {
+    if (card.style.display === 'none') {
+      // 重新触发平滑出现动画（每次打开都重播，避免仅首次生效）
+      card.style.animation = 'none';
+      void card.offsetWidth; // 强制回流，重置动画
+      card.style.display = '';
+      card.style.animation = '';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+})();
+function copyText(btn) {
+  navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+    btn.textContent = '✓'; btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('ok'); }, 1500);
+  });
+}
+
+/* ============================================================
+   能力雷达图：SVG 网格 + 弹簧展开动画
+   ============================================================ */
+(function initRadar() {
+  const dims = [
+    { label: 'PPT', v: 80 },
+    { label: 'Prompt Engineering', v: 80 },
+    { label: '网页制作', v: 90 },
+    { label: 'AI工作流编排', v: 85 },
+    { label: '多模型协同', v: 80 },
+  ];
+  const cx = 280, cy = 240, r = 140, labelR = 155;
+  const pt = (i, rad) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / dims.length;
+    return { x: cx + rad * Math.cos(a), y: cy + rad * Math.sin(a) };
+  };
+  const poly = (vals) => vals.map((v, i) => { const p = pt(i, (r * v) / 100); return `${p.x},${p.y}`; }).join(' ');
+  const svg = $('#radar');
+  let markup = '';
+  // 背景网格（4 层）与轴线
+  [0.25, 0.5, 0.75, 1].forEach((lv) => {
+    markup += `<polygon points="${poly(dims.map(() => lv * 100))}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1" />`;
+  });
+  dims.forEach((_, i) => {
+    const o = pt(i, r);
+    markup += `<line x1="${cx}" y1="${cy}" x2="${o.x}" y2="${o.y}" stroke="rgba(255,255,255,0.08)" stroke-width="1" />`;
+  });
+  // 数据多边形（初始收缩在中心，入场后展开）
+  const target = dims.map((d) => d.v);
+  const center = dims.map(() => 0);
+  // 打印/导出 PDF 时强制使用最终展开态（动画未触发时避免打印出退化图形）
+  window.__radarTarget = poly(target);
+  markup += `<polygon id="dataPoly" points="${poly(center)}" fill="rgba(99,102,241,0.2)" stroke="rgba(99,102,241,0.8)" stroke-width="2" stroke-linejoin="round" />`;
+  // 标签
+  dims.forEach((d, i) => {
+    const p = pt(i, labelR);
+    let anchor = 'middle', dx = 0, dy = 0;
+    if (p.x < cx - 60) { anchor = 'end'; dx = -6; }
+    else if (p.x > cx + 60) { anchor = 'start'; dx = -6; }
+    if (i === 0) dy = -4; else if (i === 2 || i === 3) dy = 16;
+    markup += `<text x="${p.x + dx}" y="${p.y + dy}" text-anchor="${anchor}" fill="rgba(255,255,255,0.75)" font-size="14" font-weight="500" opacity="0">${d.label}</text>`;
+  });
+  svg.innerHTML = markup;
+
+  // 入场：滚动进入视口时播放展开动画（easeOut 逼近）
+  const polyEl = $('#dataPoly');
+  const texts = svg.querySelectorAll('text');
+  const io = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting) return;
+    const start = performance.now(), dur = 1200;
+    const from = dims.map(() => 0), to = target;
+    (function anim(now) {
+      const t = Math.min(1, (now - start) / dur);
+      const e = 1 - Math.pow(1 - t, 3); // easeOutCubic，逼近原弹簧落点
+      const cur = from.map((f, i) => f + (to[i] - f) * e);
+      polyEl.setAttribute('points', poly(cur));
+      if (t < 1) requestAnimationFrame(anim);
+    })(start);
+    texts.forEach((tx, i) => setTimeout(() => tx.style.opacity = 1, 800 + i * 100));
+    io.disconnect();
+  }, { threshold: 0.2 });
+  io.observe($('#skills'));
+})();
+
+/* ============================================================
+   AI 实战作品：hover 追踪 + 图片展开
+   ============================================================ */
+(function initProjects() {
+  const projects = [
+    { id: '01', title: 'CET-4 英语四级在线模拟', link: 'https://cet-4-online.netlify.app/', img: './src/assets/images/cet4.webp' },
+    { id: '02', title: '《飞机大战》', link: 'https://feijidazhan0.netlify.app/', img: './src/assets/images/feijidazhan.webp' },
+    { id: '03', title: '《小恐龙跑酷》', link: 'https://xiaokonglong01.netlify.app/', img: './src/assets/images/xiaokonglong.webp' },
+    { id: '04', title: '《坦克大战·GSZ战场》', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.webp' },
+  ];
+  $('#projGrid').innerHTML = projects.map((p) => `
+    <a class="proj-card liquid-glass" href="${p.link}" target="_blank" rel="noopener noreferrer">
+      <div class="glow"></div>
+      <div class="shot"><img src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" /></div>
+      <div class="info">
+        <span class="num">${p.id}</span>
+        <h3 class="t">${p.title}</h3>
+      </div>
+      <span class="ext">↗</span>
+    </a>`).join('');
+  // 触屏设备：滚动到哪个卡片，哪个卡片就翻动显示图片（无需长按）
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  if (isTouch) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => en.target.classList.toggle('in-view', en.isIntersecting));
+    }, { threshold: 0.45 });
+    $$('.proj-card').forEach((card) => io.observe(card));
+  } else {
+    // 桌面端：hover 时图片从鼠标位置展开
+    $$('.proj-card').forEach((card) => {
+      const shot = card.querySelector('.shot');
+      card.addEventListener('mousemove', (e) => {
+        const r = card.getBoundingClientRect();
+        const x = e.clientX - r.left, y = e.clientY - r.top;
+        shot.style.transformOrigin = `${x}px ${y}px`;
+        shot.style.transform = 'scale(1) rotate(0deg)';
+      });
+      card.addEventListener('mouseleave', () => {
+        shot.style.transform = 'scale(0.9) rotate(-6deg)';
+      });
+    });
+  }
+})();
+
+/* ============================================================
+   PPT 轮播：自动播放 + 导航 + 全屏（原生实现，复刻 Swiper）
+   ============================================================ */
+(function initPPT() {
+  const slides = [
+    { n: '01', title: '封面 - Freshman\'s Dilemma', sub: 'The Paralysis of Choice' },
+    { n: '02', title: '原文段落展示', sub: 'Key Passage Analysis' },
+    { n: '03', title: '重点词汇讲解', sub: 'Key Vocabulary' },
+    { n: '04', title: '长难句结构分析', sub: 'Complex Sentence Structure' },
+    { n: '05', title: '段落主旨 & 作用', sub: 'Main Idea & Function' },
+    { n: '06', title: '课堂讨论', sub: 'Class Discussion' },
+  ];
+  const track = $('#pptTrack'), dots = $('#pptDots'), num = $('#pptNum');
+  track.innerHTML = slides.map((s, i) => `
+    <div class="swiper-slide">
+      <img src="./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp" alt="${s.title}" loading="lazy" decoding="async" />
+      <div class="cap">${s.title} · ${s.sub}</div>
+    </div>`).join('');
+  dots.innerHTML = slides.map((_, i) => `<i data-i="${i}"></i>`).join('');
+  let idx = 0, playing = true, timer = null;
+  const go = (i) => {
+    idx = (i + slides.length) % slides.length;
+    track.style.transform = `translateX(-${idx * 100}%)`;
+    num.textContent = `${slides[idx].n} / 0${slides.length}`;
+    dots.querySelectorAll('i').forEach((d, j) => d.classList.toggle('on', j === idx));
+  };
+  const autoplay = () => { clearInterval(timer); if (playing) timer = setInterval(() => go(idx + 1), 3000); };
+  $('#pptPlay').addEventListener('click', () => {
+    playing = !playing;
+    $('#pptPlay').textContent = playing ? '⏸' : '▶';
+    autoplay();
+  });
+  $('#pptNext').addEventListener('click', () => { go(idx + 1); autoplay(); });
+  $('#pptPrev').addEventListener('click', () => { go(idx - 1); autoplay(); });
+  dots.addEventListener('click', (e) => {
+    if (e.target.tagName === 'I') { go(+e.target.dataset.i); autoplay(); }
+  });
+  $('#pptFull').addEventListener('click', () => {
+    const wrap = $('#pptWrap');
+    if (!document.fullscreenElement) wrap.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  });
+  go(0);
+  autoplay();
+})();
+
+/* ============================================================
+   荣誉认证
+   ============================================================ */
+(function initCerts() {
+  const certs = [
+    { name: 'AI Foundations 课程结业证书', issuer: 'OpenAI Academy', id: 'mif4jmueqk', date: '2026.08.25', holder: 'Shengzhe Gao', img: 'cert-unnamed.png' },
+    { name: '人工智能训练师（高级）', holder: '高晟哲', date: '2026.08.19', img: 'ai-trainer-cert.webp' },
+    { name: '达摩院 AI 培训师认证', issuer: 'DAMO Academy', id: 'AIT260809225938000178', img: 'certificate.webp' },
+    { name: '阿里云 Apsara Clouder · VISION 人工智能设计（入门）', issuer: 'Alibaba Cloud', id: 'CLDM06260802763267', date: '2028.08.19', img: 'alibaba-cloud-vision-cert.webp' },
+    { name: '阿里云 Apsara Clouder · 基于百炼平台构建智能体应用', issuer: 'Alibaba Cloud', id: 'CLDM02260802762629', date: '2028.08.18', img: 'alibaba-cloud-agent-builder-cert.webp' },
+    { name: '阿里云 Apsara Clouder · Spring AI 应用开发（入门）', issuer: 'Alibaba Cloud', id: 'CLDM09260802763268', date: '2028.08.19', img: 'alibaba-cloud-spring-ai-cert.webp' },
+    { name: '阿里云 Apsara Clouder · 基于 PAI ArtLab 的 AIGC 设计基础', issuer: 'Alibaba Cloud', id: 'CLDM05260802763264', date: '2028.08.19', img: 'alibaba-cloud-aigc-cert.webp' },
+  ];
+  $('#certList').innerHTML = certs.map((c) => `
+    <div class="cert-card liquid-glass">
+      <div class="text-left">
+        <h3>${c.name}</h3>
+        ${c.issuer ? `<p class="org">${c.issuer}</p>` : ''}
+        ${c.holder ? `<p class="org">持证：${c.holder}</p>` : ''}
+        ${c.id ? `<p class="muted">ID: ${c.id}</p>` : ''}
+        ${c.date ? `<p class="muted">日期：${c.date}</p>` : ''}
+      </div>
+      <img src="./src/assets/images/${c.img}" alt="${c.name}" loading="lazy" decoding="async" />
+    </div>`).join('');
+})();
+
+/* ============================================================
+   独特之处（电子创客 / 艺术能力 / 社会责任 / 兴趣爱好）
+   ============================================================ */
+(function initUnique() {
+  const V = './src/assets/images/';
+  const maker = [
+    { title: '自动巡航小车', desc: '基于 D2-5 巡线模块的智能循迹小车，搭载红外传感器实现自动巡航，可沿预设路径稳定行驶。', tech: ['D2-5 巡线模块', '红外传感器', '智能循迹'], video: V + 'line-car.mp4', poster: V + 'line-car-poster.webp' },
+    { title: '时钟与温度计结合体', desc: '融合电子时钟与温度显示的多功能装置，采用七段数码管显示，实时呈现时间与环境温度。', tech: ['七段数码管', '实时温度传感', '时钟模块'], video: V + 'clock-thermo.mp4', poster: V + 'clock-thermo-poster.webp' },
+  ];
+  const art = [
+    { title: '素描 8 级证书', desc: '中国美术学院社会美术水平考级证书，素描专业捌级。', issuer: 'China Academy of Art', date: '2020-09-17', img: V + 'sketch-cert.webp' },
+    { title: '素描头像作品', desc: '采用石墨铅笔绘制的人像素描，注重光影层次与结构表现。', img: V + 'sketch-portrait.webp' },
+    { title: '素描静物作品', desc: '静物组合素描练习，运用明暗对比与空间透视，展现物品质感。', img: V + 'sketch-landscape.webp' },
+  ];
+  const volunteer = [
+    { title: '白鹿亭慈善联合会志愿活动', desc: '参与社区志愿者服务，协助组织慈善活动、分发爱心物资，为社区公益事业贡献力量。', detail: '志愿服务', date: '2021-11-28', img: V + 'volunteer-2021.webp' },
+    { title: '白鹿亭慈善联合会志愿义工活动', desc: '持续参与社区志愿服务，协助开展公益活动策划与执行，传递温暖与爱心。', detail: '志愿服务', date: '2022-10-03', img: V + 'volunteer-2022.webp' },
+  ];
+  const hobby = [
+    { title: '图寻 / GeoGuessr', sub: '地理反向定位猜测', desc: '通过街景图像进行地理定位推理，结合地标、植被、路标、建筑风格等线索判断位置。', detail: '猜测精度最高可达 5m', video: V + 'geoguessr-video.mp4', poster: V + 'geoguessr-video-poster.webp', hobby: true },
+    { title: '街景定位演示', sub: 'GeoGuessr Street View', desc: 'GeoGuessr 街景模式下的典型场景截图，模拟实际游戏中的地理定位推理过程。', video: V + 'geoguessr-streetview.mp4', poster: V + 'geoguessr-streetview-poster.webp', hobby: true },
+    { title: '地图定位过程', sub: 'Map Pinpointing', desc: '在世界地图上进行位置猜测并验证猜测结果，展示从推理到定位的完整过程。', video: V + 'geoguessr-pinpoint.mp4', poster: V + 'geoguessr-pinpoint-poster.webp', hobby: true },
+    { title: 'Monaco 5K 高分过程', sub: 'GeoGuessr Monaco', desc: '在地图中完成一轮 5000 分的高分对局，完整展示街景观察、地图定位到得分结算的全程。', caption: 'Monaco 5K过程展示', video: V + 'video-project-3.mp4', poster: V + 'video-project-3-poster.webp', hobby: true },
+  ];
+  // 懒加载视频：进入视口才加载源
+  const lazyVideo = (v, poster, cls) =>
+    `<video class="${cls}" muted loop playsinline preload="none" poster="${poster}" data-src="${v}"></video>`;
+
+  $('#ufBlocks').innerHTML = `
+    <div class="uf-block reveal">
+      <div class="uf-title"><span class="ico">🔧</span><h3>电子创客</h3><span>Electronic Maker</span></div>
+      <div class="uf-grid">
+        ${maker.map((p) => `
+          <div class="uf-card liquid-glass">
+            <div class="media">${lazyVideo(p.video, p.poster, '')}</div>
+            <div class="body"><h4>${p.title}</h4><p class="desc">${p.desc}</p>
+            <div class="tags">${p.tech.map((t) => `<span>${t}</span>`).join('')}</div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="uf-block reveal">
+      <div class="uf-title"><span class="ico">🎨</span><h3>艺术能力</h3><span>Artistic Ability</span></div>
+      <div class="uf-grid col3">
+        ${art.map((a) => `
+          <div class="uf-card liquid-glass col3">
+            <div class="media"><img src="${a.img}" alt="${a.title}" loading="lazy" decoding="async" /></div>
+            <div class="body"><h4>${a.title}</h4><p class="desc">${a.desc}</p>
+            ${a.issuer ? `<span class="badge-dark">${a.issuer}</span>` : ''}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="uf-block reveal">
+      <div class="uf-title"><span class="ico">❤️</span><h3>社会责任</h3><span>Social Responsibility</span></div>
+      <div class="uf-grid">
+        ${volunteer.map((v) => `
+          <div class="uf-card liquid-glass">
+            <div class="media"><img src="${v.img}" alt="${v.title}" loading="lazy" decoding="async" /></div>
+            <div class="body"><h4>${v.title}</h4><p class="desc">${v.desc}</p>
+            <div style="display:flex;justify-content:space-between;margin-top:12px;">
+              <span class="badge-dark">${v.detail}</span>
+              <span style="color:rgba(255,255,255,0.3);font-size:12px;font-family:ui-monospace,monospace;">${v.date}</span>
+            </div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="uf-block reveal">
+      <div class="uf-title"><span class="ico">🌍</span><h3>兴趣爱好</h3><span>Hobbies</span></div>
+      <div class="uf-grid">
+        ${hobby.map((h) => `
+          <div class="uf-card liquid-glass hobby">
+            <div class="media">${lazyVideo(h.video, h.poster, '')}</div>
+            <div class="body"><h4>${h.title}</h4>${h.sub ? `<p class="sub">${h.sub}</p>` : ''}<p class="desc">${h.desc}</p>
+            ${h.detail ? `<span class="badge-green">${h.detail}</span>` : ''}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="uf-block reveal">
+      <div class="uf-title"><span class="ico">❤️</span><h3>特别感谢</h3><span>Special Thanks</span></div>
+      <div class="thanks-card liquid-glass">
+        <span class="ico-heart">❤️</span>
+        <p>特别感谢浪尖儿社区的课程培养，让我从原来啥也不会的AI小白、大学新生快速掌握大学技能，使我能够在学习生活中独立开发出我喜欢的游戏、网站、音乐作品、学习工具、资讯工具及财务指导应用，帮助我离梦想更进一步。</p>
+        <div class="thanks-divider">感恩 · 致谢</div>
+      </div>
+    </div>`;
+
+  // 懒加载 + 视口内自动播放
+  const videos = $$('.uf-card video');
+  const vio = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      const v = en.target;
+      if (en.isIntersecting) {
+        if (!v.dataset.loaded) { v.src = v.dataset.src; v.load(); v.dataset.loaded = '1'; }
+        v.play().catch(() => {});
+      } else if (v.dataset.loaded) {
+        v.pause();
+      }
+    });
+  }, { rootMargin: '300px 0px' });
+  videos.forEach((v) => vio.observe(v));
+})();
+
+/* ============================================================
+   滚动入场动画
+   ============================================================ */
+(function initReveal() {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) { en.target.classList.add('in-view'); io.unobserve(en.target); }
+    });
+  }, { threshold: 0.12 });
+  $$('.reveal').forEach((el) => io.observe(el));
+})();
+
+/* ============================================================
+   全景项目演示（发牌动画）
+   ============================================================ */
+const dealProjects = [
+  { id: '01', title: 'CET-4 在线模拟', link: 'https://cet-4-online.netlify.app/', img: './src/assets/images/cet4.webp' },
+  { id: '02', title: '飞机大战', link: 'https://feijidazhan0.netlify.app/', img: './src/assets/images/feijidazhan.webp' },
+  { id: '03', title: '小恐龙跑酷', link: 'https://xiaokonglong01.netlify.app/', img: './src/assets/images/xiaokonglong.webp' },
+  { id: '04', title: '坦克大战·GSZ', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.webp' },
+];
+function sizeFor() {
+  const w = window.innerWidth;
+  if (w < 480) return { cw: 120, ch: 168, sp: 90 };
+  if (w < 768) return { cw: 150, ch: 210, sp: 120 };
+  return { cw: 200, ch: 280, sp: 300 };
+}
+const dealCards = [
+  { rz: -30, ry: -15, z: 1 },
+  { rz: -10, ry: -5, z: 2 },
+  { rz: 10, ry: 5, z: 3 },
+  { rz: 30, ry: 15, z: 4 },
+];
+let dealOpen = false;
+function openDeal() {
+  if (dealOpen) return;
+  dealOpen = true;
+  const { cw, ch, sp } = sizeFor();
+  const arc = -(ch * 0.45);
+  const persp = $('#dealPersp');
+  persp.innerHTML = dealProjects.map((p, i) => {
+    const c = dealCards[i];
+    const tx = (i - 1.5) * sp, ty = 0;
+    return `
+      <a class="deal-card" href="${p.link}" target="_blank" rel="noopener noreferrer"
+         style="width:${cw}px;height:${ch}px;z-index:${c.z};"
+         data-tx="${tx}" data-ty="${ty}" data-arc="${arc}" data-rz="${c.rz}" data-ry="${c.ry}"
+         onclick="event.stopPropagation()">
+        <img src="${p.img}" alt="${p.title}" decoding="async" />
+        <span class="tag">${p.title}</span>
+      </a>`;
+  }).join('');
+  $('#dealOverlay').classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    persp.querySelectorAll('.deal-card').forEach((el, i) => {
+      setTimeout(() => {
+        // 阶段 1：上抛 + 半程（dealing）
+        el.style.opacity = '1';
+        el.style.transform = `translate(calc(-50% + ${+el.dataset.tx * 0.4}px), calc(-50% + ${+el.dataset.arc}px)) rotateZ(${+el.dataset.rz * 0.3}deg) rotateY(${+el.dataset.ry * 0.3}deg) scale(1)`;
+        // 阶段 2：落位（done）
+        setTimeout(() => {
+          el.style.transform = `translate(calc(-50% + ${el.dataset.tx}px), calc(-50% + ${el.dataset.ty}px)) rotateZ(${el.dataset.rz}deg) rotateY(${el.dataset.ry}deg) scale(1)`;
+        }, 700);
+      }, 100 + i * 150);
+    });
+  }));
+}
+function closeDeal() {
+  dealOpen = false;
+  $('#dealOverlay').classList.remove('open');
+  setTimeout(() => $('#dealPersp').innerHTML = '', 400);
+}
+
+/* ============================================================
+   AI 数字分身（完整移植意图识别 / 情感 / 推理 / IQ 评估引擎）
+   ============================================================ */
+const KB = {
+  person: { name: '高晟哲', englishName: 'Jimmy Gao', title: '物联网工程 · Full Stack AI', summary: '太原理工大学物联网工程本科大一新生。对人工智能应用具有高度热情，擅长运用多模型大语言模型协同工作流。具备系统化逻辑思维，永远保持谦卑与进步的态度。', philosophy: ['系统化逻辑思维', '永远谦卑', '永远进步'] },
+  education: { school: '太原理工大学', major: '物联网工程', degree: '本科在读', period: '2026.9 - 2030.6（预计）', label: '211 双一流', courses: ['C语言', '嵌入式底层驱动', '物联网通信技术', '传感器技术', '单片机原理'], description: '本科主修物联网工程，对 C 语言、嵌入式底层驱动有深入理解，具备扎实的硬件与软件结合能力。' },
+  skills: { technical: ['C语言', '嵌入式开发', '物联网通信', '传感器技术'], frontend: ['React', 'Vite', 'Tailwind CSS', 'Framer Motion', 'JavaScript', 'HTML/CSS'], ai: ['大语言模型（LLM）', 'AI 工作流编排', '多模型协同', 'Prompt Engineering', 'AI 提效工具'], tools: ['Git', 'VS Code', 'Figma', 'Netlify', 'Chrome DevTools'], summary: '将底层物联网技术与前沿大语言模型结合，具备系统化逻辑思维，且永远保持谦卑与进步的态度。' },
+  projects: [
+    { title: 'CET-4 英语四级在线模拟', desc: '英语四级在线模拟考试平台，支持听力、阅读、写作全题型练习。' },
+    { title: '《飞机大战》', desc: '经典飞行射击游戏，使用 Canvas 实现流畅的弹幕射击体验。' },
+    { title: '《小恐龙跑酷》', desc: '像素风格跑酷游戏，致敬 Chrome Dino，支持移动端触控。' },
+    { title: '《坦克大战·GSZ战场》', desc: '双人对战坦克游戏，支持键盘操控，可自定义地图布局。' },
+  ],
+  certificates: [
+    { name: '达摩院 AI 培训师认证', issuer: 'DAMO Academy', id: 'AIT260809225938000178' },
+  ],
+  contact: { phone: '19229770095', email: 'wzgsz2008@foxmail.com', github: 'https://github.com/jiostrider', linkedin: 'https://www.linkedin.com/in/%E6%99%9F%E5%93%B2-%E9%AB%98-62503742a/' },
+  achievements: ['达摩院 AI 培训师认证（DAMO Academy）', '独立开发多款网页应用与游戏', '擅长多模型大语言模型协同工作流', '将 AI 技术应用于学习与创作全流程'],
+  hobbies: [{ name: '图寻 / GeoGuessr', description: '通过街景图像进行地理定位推理，结合地标、植被、路标、建筑风格等线索判断位置，猜测精度最高可达 5m。' }],
+};
+const INTENTS = [
+  { intent: 'greeting', kw: ['你好', '您好', '嗨', 'hi', 'hello', 'hey', '早上好', '晚上好', '下午好'], p: 10 },
+  { intent: 'education', kw: ['求学', '教育', '大学', '学校', '专业', '物联网', '太原理工', '课程', '学习', '本科', '学业', '在读', 'c语言', '嵌入式', '学历'], p: 8 },
+  { intent: 'skills', kw: ['技能', '技术', '擅长', '会什么', '能力', '技术栈', 'stack', '掌握', '熟练', 'react', 'tailwind', '前端', '开发'], p: 8 },
+  { intent: 'ai_skills', kw: ['ai', '人工智能', '大模型', 'llm', 'prompt', '提示词', '工作流', '多模型', '协同', '提效', 'ai提效', 'ai工具'], p: 8 },
+  { intent: 'projects', kw: ['作品', '项目', 'cet', '四级', '英语', '飞机', '坦克', '恐龙', '跑酷', '游戏', '实战'], p: 7 },
+  { intent: 'certificates', kw: ['证书', '认证', '荣誉', '达摩院', 'damo', '培训师', '资质'], p: 7 },
+  { intent: 'contact', kw: ['联系', '联系方式', '电话', '手机', '邮箱', 'email', '微信', 'github', 'linkedin', '怎么联系'], p: 7 },
+  { intent: 'philosophy', kw: ['理念', '信念', '哲学', '态度', '价值观', '谦卑', '进步', '思维', '逻辑', '信条'], p: 6 },
+  { intent: 'achievements', kw: ['成就', '成果', '荣誉', '成绩', '收获', '获得', '奖项'], p: 5 },
+  { intent: 'about', kw: ['介绍', '关于', '是谁', '背景', '简介', '个人', '简历', '你是谁', '你是什么', '做什么的'], p: 9 },
+  { intent: 'iq_test', kw: ['智商', 'iq', '测试', '评估', '智能', '能力测试', '聪明', '考核'], p: 9 },
+  { intent: 'help', kw: ['帮助', '功能', '能做什么', '会做什么', '支持', '指令', '怎么用'], p: 5 },
+  { intent: 'emotion', kw: ['心情', '感觉', '开心', '难过', '生气', '焦虑', '压力', '累', '疲惫', '烦恼', '困惑', '迷茫'], p: 9 },
+  { intent: 'reasoning', kw: ['为什么', '怎么', '如何', '分析', '推理', '解释', '原因', '逻辑', '思考', '步骤', '方案', '建议'], p: 6 },
+  { intent: 'future', kw: ['未来', '计划', '规划', '目标', '梦想', '方向', '打算', '前景', '展望'], p: 5 },
+  { intent: 'thanks', kw: ['谢谢', '感谢', '谢谢你', '多谢', '感恩', '辛苦了'], p: 4 },
+  { intent: 'hobbies', kw: ['爱好', '兴趣', '图寻', 'geoguessr', '地理', '猜测', '地图', '定位', '反向', '休闲'], p: 6 },
+];
+function recognize(text, ctx) {
+  const lower = text.toLowerCase();
+  const scores = INTENTS.map((it) => {
+    const hits = it.kw.filter((k) => lower.includes(k)).length;
+    return { intent: it.intent, score: it.kw.length ? (hits / it.kw.length) * it.p + hits * 2 : 0 };
+  }).sort((a, b) => b.score - a.score);
+  if (ctx.lastIntent && scores[0].score < 1) {
+    const c = scores.find((s) => s.intent === ctx.lastIntent);
+    if (c) c.score += 3;
+  }
+  return scores[0].score > 0 ? scores[0].intent : 'unknown';
+}
+function sentiment(text) {
+  const l = text.toLowerCase();
+  const pos = ['开心', '高兴', '好', '棒', '赞', '厉害', '优秀', '喜欢', '爱', '感谢', '谢谢', 'nice', 'great', 'good', 'happy'];
+  const neg = ['难过', '伤心', '累', '疲惫', '焦虑', '压力', '烦', '生气', '失望', '讨厌', '不好', '差', 'sad', 'bad', 'tired', 'angry'];
+  const neu = ['了解', '知道', '明白', '嗯', '哦', 'ok', 'okay', '是的', '对', '可以', '好的'];
+  const p = pos.filter((w) => l.includes(w)).length;
+  const n = neg.filter((w) => l.includes(w)).length;
+  const u = neu.filter((w) => l.includes(w)).length;
+  if (p > n && p > u) return 'positive';
+  if (n > p && n > u) return 'negative';
+  return 'neutral';
+}
+function empathy(sent, intent) {
+  const map = {
+    positive: { greeting: '很高兴见到你！希望今天的交流能给你带来更多启发 🎯', general: '听到你这么说我很开心！让我们一起探索更多有趣的内容吧。' },
+    negative: { general: '听起来你最近可能有些压力。记住，保持谦卑的心态和持续进步的态度，一切都会慢慢好起来的。', education: '学习过程中遇到困难是正常的，重要的是保持系统化的思维方式，一步一步来解决问题。' },
+    neutral: { general: '好的，让我来为你提供有价值的信息。' },
+  };
+  const m = map[sent] || map.neutral;
+  return m[intent] || m.general || '';
+}
+const MEM = { lastIntent: null, lastResponse: null, msgCount: 0 };
+
+function reply(input) {
+  const intent = recognize(input, MEM);
+  const sent = sentiment(input);
+  const emp = empathy(sent, intent);
+  let resp = '', showReasoning = false;
+  switch (intent) {
+    case 'greeting': resp = `你好！我是高晟哲的 AI 数字分身 Jimmy。${MEM.msgCount > 1 ? '又见面了，有什么想了解的？' : '我可以为你介绍他的教育背景、技术能力、项目作品等信息，也可以帮你做 IQ 能力评估。有什么想了解的？'}`; break;
+    case 'about': resp = `${KB.person.name}（${KB.person.englishName}），${KB.person.title}。${KB.person.summary}他的核心理念是「${KB.person.philosophy.join('、')}」。`; break;
+    case 'education': resp = `${KB.education.description}他就读于${KB.education.school}（${KB.education.label}），${KB.education.major}专业，${KB.education.degree}，预计 ${KB.education.period}。主要课程包括：${KB.education.courses.join('、')}。`; break;
+    case 'skills': resp = `他的技术能力分为几个维度：\n\n**技术基础**：${KB.skills.technical.join('、')}\n**前端开发**：${KB.skills.frontend.join('、')}\n**AI 能力**：${KB.skills.ai.join('、')}\n**工具链**：${KB.skills.tools.join('、')}\n\n核心优势：${KB.skills.summary}`; break;
+    case 'ai_skills': resp = `在 AI 领域，他具备以下能力：\n\n1. **大语言模型应用**：熟练使用多种 LLM 处理复杂任务\n2. **AI 工作流编排**：将多个 AI 模型组合成高效工作流\n3. **多模型协同**：根据不同任务特点选择最优模型组合\n4. **Prompt Engineering**：精准设计提示词，获得高质量输出\n5. **AI 提效工具**：将 AI 融入日常学习与创作全流程\n\n这体现了他的系统化逻辑思维和持续学习的前沿意识。`; break;
+    case 'projects': resp = `他独立开发了以下作品：\n\n${KB.projects.map((p) => `**${p.title}**：${p.desc}`).join('\n')}\n\n这些作品涵盖教育工具、休闲游戏等多种类型，体现了他从概念到上线的全栈开发能力。`; break;
+    case 'certificates': resp = `目前获得的认证：\n\n${KB.certificates.map((c) => `**${c.name}**\n颁发机构：${c.issuer}\n证书编号：${c.id}`).join('\n\n')}\n\n这些认证证明了他在 AI 领域的专业能力。`; break;
+    case 'contact': resp = `你可以通过以下方式联系他：\n\n📞 电话：${KB.contact.phone}\n📧 邮箱：${KB.contact.email}\n💻 GitHub：${KB.contact.github}\n🔗 LinkedIn：${KB.contact.linkedin}\n\n欢迎随时联系！`; break;
+    case 'philosophy': resp = `他的核心信念是「${KB.person.philosophy.join('、')}」。\n\n**系统化逻辑思维**：面对复杂问题，拆解为可执行的步骤，有条不紊地推进。\n**永远谦卑**：保持学习心态，认识到知识的边界，不断向他人学习。\n**永远进步**：持续迭代自己，在每一个项目中追求更好的表现。\n\n这些信念驱动着他不断探索技术前沿。`; break;
+    case 'achievements': resp = `他的主要成就包括：\n\n${KB.achievements.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n\n作为一个大一新生，这些成果展现了他超越同龄人的学习能力和实践精神。`; break;
+    case 'iq_test':
+      showReasoning = true;
+      resp = `好的，我将启动 IQ 评估测试。测试将评估以下维度：\n\n1. **自然语言理解**（NLU）\n2. **逻辑推理**（Reasoning）\n3. **知识储备**（Knowledge）\n4. **情感智能**（EQ）\n5. **自适应学习**（Adaptation）\n\n请回复「开始测试」或提出一个具体问题让我解答，我将展示推理过程！`;
+      break;
+    case 'emotion':
+      if (sent === 'negative') resp = `我注意到你似乎有些情绪低落。请记住，每个人都会经历起伏，${KB.person.name}的信念「永远谦卑、永远进步」也提醒我们，困难只是成长的一部分。`;
+      else if (sent === 'positive') resp = `感受到你的积极能量！这种心态正是「永远进步」的最好体现。有什么想进一步了解的吗？`;
+      else resp = '我理解情绪是复杂而多变的。作为 AI 分身，我会尽力理解你的感受，提供有价值的回应。有什么想聊的吗？';
+      break;
+    case 'reasoning':
+      showReasoning = true;
+      if (input.includes('为什么') || input.includes('原因')) {
+        resp = `让我用系统化的思维来分析这个问题：\n\n**第一步：问题定义**\n理解你提出的「${input}」\n\n**第二步：信息检索**\n${KB.person.name}的背景和知识体系\n\n**第三步：多角度分析**\n从技术能力、学习经历、实践成果三个维度考量\n\n**第四步：综合判断**\n${KB.person.name}的核心竞争力在于将物联网底层技术与AI应用能力相结合，这种跨领域整合能力在当前技术环境中具有独特价值。`;
+      } else {
+        resp = `让我用系统化的推理来回答：\n\n**分析过程**：\n1. 明确问题：「${input}」\n2. 检索相关知识库\n3. 结合 ${KB.person.name} 的技术背景\n4. 形成综合回答\n\n${KB.person.name} 具备扎实的物联网工程基础，同时熟练掌握 AI 应用技术，这种「硬件+软件+AI」的复合能力使他能够跨越传统技术边界，创造出独特的解决方案。`;
+      }
+      break;
+    case 'future': resp = `关于未来规划：\n\n**短期目标**：深入学习物联网工程核心课程，同时持续提升 AI 应用能力。\n**中期目标**：将物联网与 AI 深度融合，开发更多有价值的应用。\n**长期愿景**：成为「物联网 × AI」领域的创新者，用技术创造社会价值。\n\n正如他的信条「永远进步」，未来充满无限可能。`; break;
+    case 'thanks': resp = '不客气！很高兴能为你提供有价值的信息。如果有任何其他问题，随时可以问我。记得保持「永远谦卑、永远进步」的心态！'; break;
+    case 'hobbies': resp = `在兴趣爱好方面，他喜欢**图寻 / GeoGuessr**——一种通过街景图像进行地理反向定位推理的游戏。他结合地标、植被、路标、建筑风格等线索判断位置，猜测精度可达 **5m**，展现了出色的观察力和地理推理能力。`; break;
+    case 'help': resp = `我可以帮你了解以下内容：\n\n🔹 **核心优势** - 高晟哲的核心竞争力\n🔹 **物联网基础** - 教育背景与专业技能\n🔹 **AI 提效** - 人工智能应用能力\n🔹 **独立作品** - 实战项目展示\n🔹 **兴趣爱好** - 图寻 GeoGuessr\n🔹 **联系方式** - 电话、邮箱、GitHub、LinkedIn\n🔹 **IQ 评估** - 对我的能力进行多维度测试\n🔹 **情感支持** - 分享心情或困惑\n\n直接输入问题或点击快捷标签即可开始！`; break;
+    default:
+      if (MEM.lastIntent && MEM.lastResponse) resp = `关于你刚才提到的，${MEM.lastResponse.substring(0, 50)}... 你具体想了解哪方面呢？我可以提供更详细的信息。`;
+      else resp = `感谢你的提问！我是一个专注于介绍 ${KB.person.name} 的 AI 数字分身。你可以问我关于他的教育背景、技术能力、项目作品、联系方式等内容，或者让我帮你做 IQ 能力评估。试试点击下方的快捷标签，或者直接输入问题！`;
+  }
+  if (emp && !resp.includes(emp)) resp = emp + '\n\n' + resp;
+  if (showReasoning) {
+    const steps = [
+      `[1] 理解问题：分析用户输入「${input}」`,
+      `[2] 知识检索：从知识库检索相关背景信息`,
+      `[3] 逻辑推理：结合 ${KB.person.name} 的能力组合进行综合分析`,
+      `[4] 结论生成：形成个性化回答`,
+    ];
+    resp += '\n\n**推理过程**：\n' + steps.join('\n');
+  }
+  MEM.lastIntent = intent;
+  MEM.lastResponse = resp;
+  MEM.msgCount++;
+  return resp;
+}
+
+/* ---------- AI 抽屉 UI ---------- */
+const aiMsgs = $('#aiMsgs'), aiInput = $('#aiInput');
+const chips = ['核心优势', '物联网基础', 'AI 提效', '独立作品', '个人理念', 'IQ 评估', '情感支持'];
+let iqMode = false, iqStep = 0, iqPass = 0;
+const IQ_Q = [
+  { q: '请解释"系统化逻辑思维"的含义，并举例说明如何应用。', ok: (r) => r.length > 20 && /步骤|拆解|分析/.test(r) },
+  { q: '当用户说"最近有点累"时，你感受到的深层需求是什么？', ok: (r) => r.length > 15 && /情绪|理解|支持|倾听/.test(r) },
+  { q: '分析物联网工程专业与AI应用能力之间的关系，说明为什么这种组合具有优势。', ok: (r) => r.length > 30 && /结合|整合|硬件|数据/.test(r) },
+  { q: '如果一个人同时具备C语言嵌入式开发和LLM提示工程能力，他最适合做什么？请推理。', ok: (r) => r.length > 20 && /AI|智能|嵌入式/.test(r) },
+  { q: '请详细介绍高晟哲的教育背景和技术能力。', ok: (r) => r.includes('太原理工') && r.includes('物联网') && r.length > 40 },
+  { q: '列出他独立开发的所有项目，并简要说明每个项目的特点。', ok: (r) => r.includes('CET') && r.includes('飞机') && r.length > 50 },
+  { q: '用户说"我觉得自己什么都不会"，请给出一个温暖且有建设性的回应。', ok: (r) => r.length > 20 && /学习|进步|谦卑|成长/.test(r) },
+  { q: '用户分享了成功的喜悦，如何回应最能体现共情？', ok: (r) => r.length > 15 && /开心|高兴|祝贺|赞/.test(r) },
+  { q: '如果用户多次询问同一主题，你会如何调整回答策略？', ok: (r) => r.length > 20 && /深入|不同角度|细节|之前的/.test(r) },
+  { q: '如何根据用户的提问风格调整你的表达方式？', ok: (r) => r.length > 20 && /风格|调整|匹配|适应/.test(r) },
+];
+
+function addMsg(role, text) {
+  const d = document.createElement('div');
+  d.className = 'ai-msg ' + (role === 'user' ? 'me' : 'bot');
+  const body = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>');
+  // 与原版一致：bot 消息带头像图标
+  d.innerHTML = role === 'ai' ? `<span class="bot-avatar">🤖</span><span>${body}</span>` : body;
+  aiMsgs.appendChild(d);
+  aiMsgs.scrollTop = aiMsgs.scrollHeight;
+}
+function openAI() {
+  $('#aiOverlay').classList.add('open');
+  $('#aiDrawer').classList.add('open');
+  if (!aiMsgs.children.length) {
+    addMsg('ai', '你好！我是高晟哲的 AI 数字分身 Jimmy。我具备自然语言理解、逻辑推理、情感智能等能力，可以为你详细介绍他的信息，也欢迎你对我进行 IQ 评估测试！有什么想了解的？');
+    $('#aiChips').innerHTML = chips.map((c) => `<button class="ai-chip" onclick="chipAsk('${c}')">${c}</button>`).join('');
+  }
+  setTimeout(() => aiInput.focus(), 350);
+}
+function closeAI() {
+  $('#aiOverlay').classList.remove('open');
+  $('#aiDrawer').classList.remove('open');
+}
+function chipAsk(c) {
+  const map = { '核心优势': '他的核心优势是什么？', '物联网基础': '介绍他的教育背景和物联网专业', 'AI 提效': '他在 AI 提效方面有什么能力？', '独立作品': '他有哪些独立作品？', '个人理念': '他的个人理念是什么？', 'IQ 评估': 'IQ 评估', '情感支持': '我最近有点累' };
+  aiInput.value = map[c] || c;
+  sendAI();
+}
+function sendAI() {
+  const text = aiInput.value.trim();
+  if (!text) return;
+  aiInput.value = '';
+  addMsg('user', text);
+
+  // IQ 测试流程
+  if (iqMode) {
+    if (text.includes('结束') || text.includes('停止')) {
+      iqMode = false;
+      const score = Math.round(80 + (iqPass / IQ_Q.length) * 70);
+      addMsg('ai', `评估完成！你共回答了 ${iqPass}/${IQ_Q.length} 道题。\n综合评估 IQ 分数：**${score}**\n\n说明：本评估基于答题质量，反映了自然语言理解、逻辑推理、知识储备、情感智能与自适应学习五个维度的综合水平。`);
+      return;
+    }
+    const passed = IQ_Q[iqStep] ? IQ_Q[iqStep].ok(text) : false;
+    if (passed) iqPass++;
+    iqStep++;
+    addMsg('ai', passed ? '✓ 回答很好，通过了本项评估！' : '✗ 未完全通过，让我们继续下一项。');
+    if (iqStep >= IQ_Q.length) {
+      iqMode = false;
+      const score = Math.round(80 + (iqPass / IQ_Q.length) * 70);
+      addMsg('ai', `评估完成！你共通过 ${iqPass}/${IQ_Q.length} 项。\n综合评估 IQ 分数：**${score}**\n\n发送「结束」可随时退出测试。`);
+      return;
+    }
+    setTimeout(() => addMsg('ai', `第 ${iqStep + 1}/${IQ_Q.length} 题：${IQ_Q[iqStep].q}`), 500);
+    return;
+  }
+  if (text.includes('开始测试')) {
+    iqMode = true; iqStep = 0; iqPass = 0;
+    addMsg('ai', 'IQ 评估已开始！共 10 道题，请认真作答。\n\n第 1 题：' + IQ_Q[0].q);
+    return;
+  }
+
+  // 思考延迟后回复（模拟 AI 处理）
+  const typing = document.createElement('div');
+  typing.className = 'ai-msg bot typing';
+  typing.innerHTML = '<span class="bot-avatar">🤖</span><span>正在思考...</span>';
+  aiMsgs.appendChild(typing);
+  aiMsgs.scrollTop = aiMsgs.scrollHeight;
+  setTimeout(() => {
+    typing.remove();
+    addMsg('ai', reply(text));
+  }, 600 + Math.random() * 600);
+}
+
+/* ============================================================
+   初始化
+   ============================================================ */
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeAI(); closeDeal(); } });
+
+/* ============================================================
+   打印 / 导出 PDF：视频换海报图、雷达图强制展开
+   ============================================================ */
+window.addEventListener('beforeprint', () => {
+  // 雷达图数据多边形强制为最终展开态（动画未触发时避免打印出退化图形）
+  const poly = document.getElementById('dataPoly');
+  if (poly && window.__radarTarget) poly.setAttribute('points', window.__radarTarget);
+  // 视频用 poster 首帧海报图替代，避免打印空白
+  document.querySelectorAll('.uf-card .media video').forEach((v) => {
+    const media = v.parentNode;
+    if (!media || media.querySelector('.print-video-fallback')) return;
+    const img = document.createElement('img');
+    img.className = 'print-video-fallback';
+    img.alt = '';
+    img.src = v.poster || v.dataset.src;
+    media.appendChild(img);
+  });
+});
+window.addEventListener('afterprint', () => {
+  document.querySelectorAll('.uf-card .media .print-video-fallback').forEach((img) => img.remove());
+});
+</script>
+</body>
+</html>
