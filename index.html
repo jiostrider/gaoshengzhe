@@ -10,7 +10,8 @@
   - 复刻 React 作品集全部动效（原生 JS/CSS 实现，零构建依赖）
   - 双击 index.html 同级目录下的本文件即可浏览
   - 资源均引用本地相对路径；联网时加载 Google Fonts / hls.js CDN
-  - 背景视频保留远程 MUX HLS 流（联网时播放，离线时显示 CSS 渐变底）
+  - 背景视频已本地化（src/assets/media/bg-loop.mp4，约 2MB 循环）；
+    远程 MUX HLS 流仅作本地文件缺失时的兜底（需联网）
   ============================================================
 -->
 <!-- 联网时可用的字体（离线时自动降级为系统字体）；preload+onload 非阻塞加载，不拖慢首帧 -->
@@ -39,21 +40,9 @@
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.01em;
     overflow-x: hidden;
-    cursor: none;
   }
-  /* 自定义光标模式下，隐藏系统光标 */
-  a, button, input, textarea, [role="button"] { cursor: none !important; }
   img, video { display: block; max-width: 100%; }
   section { position: relative; z-index: 10; width: 100%; max-width: 1024px; margin: 0 auto; padding: 112px 24px; }
-
-  /* 自定义光标 */
-  .cursor-dot, .cursor-ring {
-    position: fixed; top: 0; left: 0;
-    pointer-events: none; z-index: 9999; border-radius: 50%;
-  }
-  .cursor-dot { width: 6px; height: 6px; background: #fff; mix-blend-mode: difference; }
-  .cursor-ring { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,0.6); mix-blend-mode: difference; }
-  @media (pointer: coarse) { .cursor-dot, .cursor-ring { display: none; } body { cursor: auto !important; } }
 
   /* 液体玻璃卡片 */
   .liquid-glass {
@@ -99,6 +88,9 @@
   .bg-video {
     position: fixed; inset: 0; width: 100%; height: 100%;
     object-fit: cover; z-index: 0; pointer-events: none;
+    /* 跨浏览器兼容：强制提升为 GPU 合成层，规避 Chrome 特定 GPU 配置下
+       video 图层不参与合成导致的黑帧/不显示（Edge 默认策略较宽松） */
+    transform: translateZ(0);
   }
   .bg-overlay { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,0.35); pointer-events: none; }
 
@@ -122,11 +114,102 @@
     position: relative; z-index: 1; margin-top: 16px;
     padding: 12px 32px; border: 1px solid rgba(255,255,255,0.2); border-radius: 999px;
     color: rgba(255,255,255,0.6); font-size: 14px; letter-spacing: 0.2em;
-    transition: all 0.3s;
+    opacity: 0; transform: translateY(8px); pointer-events: none;
+    transition: all 0.5s;
   }
+  .splash .enter.ready { opacity: 1; transform: none; pointer-events: auto; }
   .splash:hover .enter { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
   .load-bar { width: 180px; height: 2px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; position: relative; z-index: 1; }
   .load-bar i { display: block; height: 100%; width: 0; background: #fff; transition: width 0.3s; }
+
+  /* ============================================================
+     Splash 趣味加载动画
+     - 纯 CSS transform/opacity 合成器动画，零额外网络请求，不拖慢首屏
+     - 三种动画状态：① 轨道卫星+实时百分比 ② 状态词轮播 ③ 三点波浪
+     - 就绪过渡：卫星并入 → 圆环弹跳 → 对勾描边
+     ============================================================ */
+  .loader { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  /* 状态① 轨道卫星：白点绕虚线细环公转（呼应自定义光标的细环语言），环心显示真实加载百分比 */
+  .loader-orbit { position: relative; width: 64px; height: 64px; }
+  .loader-orbit .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1px dashed rgba(255,255,255,0.28);
+    transition: border-color 0.4s ease;
+  }
+  .loader-orbit .orbiter { position: absolute; inset: 0; animation: orbitSpin 2.4s cubic-bezier(0.55, 0.1, 0.45, 0.9) infinite; }
+  .loader-orbit .orbiter::before {
+    content: ""; position: absolute; top: -3.5px; left: 50%; margin-left: -3.5px;
+    width: 7px; height: 7px; border-radius: 50%; background: #fff;
+    box-shadow: 0 0 10px rgba(255,255,255,0.55);
+  }
+  @keyframes orbitSpin { to { transform: rotate(1turn); } }
+  .loader-orbit .pct {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.85); transition: opacity 0.25s ease;
+  }
+  /* 状态② 状态词轮播：等宽小字 6.4s 一循环（每词停留 1.6s），节奏舒缓不催促 */
+  .loader-words { position: relative; width: 176px; height: 14px; overflow: hidden; text-align: center; }
+  .loader-words span {
+    position: absolute; inset: 0;
+    font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    opacity: 0; transform: translateY(8px);
+    animation: wordCycle 6.4s linear infinite;
+  }
+  .loader-words span:nth-child(2) { animation-delay: 1.6s; }
+  .loader-words span:nth-child(3) { animation-delay: 3.2s; }
+  .loader-words span:nth-child(4) { animation-delay: 4.8s; }
+  @keyframes wordCycle {
+    0%       { opacity: 0; transform: translateY(8px); }
+    4%, 20%  { opacity: 1; transform: none; }
+    24%,100% { opacity: 0; transform: translateY(-8px); }
+  }
+  /* 状态③ 三点波浪：小圆点交错跳跃，持续指示"仍在工作" */
+  .loader-dots { display: flex; gap: 6px; }
+  .loader-dots i {
+    width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.75);
+    animation: dotHop 1.2s ease-in-out infinite;
+  }
+  .loader-dots i:nth-child(2) { animation-delay: 0.15s; }
+  .loader-dots i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dotHop {
+    0%, 100% { transform: translateY(0); opacity: 0.35; }
+    40%      { transform: translateY(-5px); opacity: 1; }
+  }
+  /* 进度条扫光：半透明白光周期掠过，增强"推进感" */
+  .load-bar::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 36%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: translateX(-110%);
+    animation: barSheen 1.8s linear infinite;
+  }
+  @keyframes barSheen { to { transform: translateX(320%); } }
+  /* 就绪状态：循环动画全部退场，圆环弹跳后对勾描边入场 */
+  .splash.ready .orbiter { opacity: 0; transform: scale(0.2); animation: none; transition: opacity 0.35s ease, transform 0.35s ease; }
+  .splash.ready .loader-dots i { animation: none; opacity: 0; transition: opacity 0.3s ease; }
+  .splash.ready .loader-words span { animation: none; opacity: 0; transition: opacity 0.3s ease; }
+  .splash.ready .ring { border-style: solid; border-color: rgba(255,255,255,0.5); animation: ringPop 0.55s ease both; }
+  @keyframes ringPop { 0% { transform: scale(1); } 50% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  .splash.ready .pct { opacity: 0; }
+  .loader-check { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.2s ease; }
+  .loader-check path { stroke-dasharray: 28; stroke-dashoffset: 28; }
+  .splash.ready .loader-check { opacity: 1; }
+  .splash.ready .loader-check path { animation: checkDraw 0.45s 0.12s ease forwards; }
+  @keyframes checkDraw { to { stroke-dashoffset: 0; } }
+  /* 小屏适配：轨道等比缩小，避免拥挤 */
+  @media (max-width: 480px) {
+    .loader-orbit { width: 54px; height: 54px; }
+    .loader-orbit .pct { font-size: 10px; }
+    .loader-words { width: 150px; }
+  }
+  /* 减弱动态偏好：停用全部循环动画，仅保留静态环 + 首个状态词 */
+  @media (prefers-reduced-motion: reduce) {
+    .orbiter, .loader-dots i, .loader-words span, .load-bar::after { animation: none; }
+    .loader-dots i { opacity: 0.5; }
+    .loader-words span:first-child { opacity: 1; transform: none; }
+    .splash.ready .loader-check path { animation: none; stroke-dashoffset: 0; }
+  }
 
   /* ============================================================
      导航栏
@@ -140,7 +223,7 @@
   }
   @keyframes navIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
   .nav-left { display: flex; align-items: center; gap: 32px; position: relative; z-index: 1; }
-  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; }
+  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; cursor: pointer; }
   .nav-links { display: flex; align-items: center; gap: 32px; font-size: 16px; font-weight: 500; }
   .nav-links button { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 16px; transition: color 0.3s; }
   .nav-links button:hover, .nav-links button.active { color: #fff; }
@@ -171,16 +254,6 @@
       transparent calc(50% + 0.5px));
   }
   @media (max-width: 768px) { .nav-links { display: none; } }
-
-  /* 招聘官看板（侧边悬浮） */
-  .recruiter-bar {
-    position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 40;
-    background: #fff; color: #000; padding: 8px 12px; border-radius: 0 12px 12px 0;
-    box-shadow: 0 0 15px rgba(255,255,255,0.25); border: none; font-size: 12px; font-weight: 600;
-    letter-spacing: 0.1em; writing-mode: vertical-rl; cursor: none;
-    transition: padding 0.3s;
-  }
-  .recruiter-bar:hover { padding-right: 16px; }
 
   /* ============================================================
      Hero
@@ -262,48 +335,95 @@
   .radar-svg { width: 100%; max-width: 576px; overflow: visible; }
 
   /* ============================================================
-     AI 实战作品（项目卡片）
+     AI 实战作品：扑克牌堆叠轮播
+     （效果学习改造自 github.com/JIEJOE-WEB-Tutorial/001-poker-slides）
      ============================================================ */
-  .proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-  @media (max-width: 768px) { .proj-grid { grid-template-columns: 1fr; } }
-  .proj-card { height: 256px; border-radius: 16px; overflow: hidden; position: relative; cursor: none; }
-  /* 注意：glow / shot / info 均不使用 z-index，仅靠 DOM 顺序（info 最后渲染在最上）。
-     若给 .info 加 z-index 会创建 stacking context，把 .t 的 mix-blend-mode 隔离在
-     透明背景内，导致实时反色失效（这正是之前"并未好转"的根因）。 */
-  .proj-card .glow {
-    position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s;
-    background: radial-gradient(circle at center, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.75) 45%, rgba(255,255,255,0.35) 100%);
+  /* --cw 为单张牌宽；舞台宽 = 牌宽 × 2.2，可容纳最大位移的一张牌 */
+  .poker-stage, .poker-meta { --cw: clamp(200px, 42vw, 340px); }
+  .poker-stage {
+    position: relative;
+    width: calc(var(--cw) * 2.2);
+    height: calc(var(--cw) * 0.74);
+    margin: 12px auto 0;
+    user-select: none;
+    cursor: pointer;
   }
-  .proj-card .shot {
-    position: absolute; inset: 0; opacity: 0;
-    transition: opacity 0.3s, transform 0.3s;
+  .poker-card {
+    position: absolute; top: 0; left: 0;
+    width: var(--cw); height: calc(var(--cw) * 0.66);
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.5);
+    background: #0b0e1a;
+    transform-origin: bottom left; /* 关键：绕左下角旋转，形成扇形牌堆 */
+    box-shadow: 0 16px 44px rgba(0,0,0,0.5);
+    will-change: transform;
   }
-  .proj-card:hover .glow, .proj-card:hover .shot { opacity: 1; }
-  .proj-card .shot img { width: 100%; height: 100%; object-fit: cover; }
-  .proj-card .info { position: absolute; inset: 0; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
-  .proj-card .num {
-    align-self: flex-start; font-family: ui-monospace, monospace; font-size: 16px;
-    padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.08);
-    color: #fff; transition: opacity 0.3s;
+  .poker-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .poker-card .cap {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 26px 14px 10px; color: #fff; font-size: 13px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.75));
+    pointer-events: none;
   }
-  /* 默认白色字体（阴影保证深底可读）；hover 图片出现时文字同步淡出 */
-  .proj-card .t {
-    font-size: 24px; font-weight: 500; color: #fff;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.5);
-    transition: opacity 0.3s;
+  .poker-meta {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    width: calc(var(--cw) * 2.2); margin: 18px auto 0;
   }
-  .proj-card .ext { position: absolute; top: 24px; right: 24px; z-index: 4; color: #fff; font-size: 22px; pointer-events: none; transition: opacity 0.3s; }
-  .proj-card:hover .num, .proj-card:hover .t, .proj-card:hover .ext { opacity: 0; }
-  /* 移动端（无 hover 设备）：滚动到哪个卡片，哪个卡片就翻动显示图片，
-     避免需长按才看图的弊端。桌面端保持原 hover 交互不受影响。 */
-  @media (hover: none) {
-    .proj-card { perspective: 800px; }
-    .proj-card .shot {
-      transform: rotateY(-90deg); transform-origin: left center;
-      transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
-    }
-    .proj-card.in-view .shot { opacity: 1; transform: rotateY(0deg); }
-    .proj-card.in-view .num, .proj-card.in-view .t, .proj-card.in-view .ext { opacity: 0; }
+  .poker-meta .poker-num { font-family: ui-monospace, monospace; font-size: 14px; letter-spacing: 0.1em; color: rgba(255,255,255,0.55); }
+  .poker-meta h3 { font-size: 22px; font-weight: 600; color: #fff; }
+  .poker-meta .poker-link {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 24px; border-radius: 999px;
+    font-size: 15px; font-weight: 600; color: #fff; text-decoration: none;
+    /* 液态玻璃：半透明渐变底 + 背景模糊 + 内高光（与站内 .liquid-glass 同款质感）*/
+    background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(139,92,246,0.28));
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,0.25),
+      inset 0 -10px 20px rgba(99,102,241,0.18),
+      0 8px 28px rgba(99,102,241,0.35);
+    position: relative; overflow: hidden;
+    transition: transform 0.25s, box-shadow 0.25s;
+  }
+  /* 玻璃高光描边：mask 打孔技法，仅描 1.2px 渐变边 */
+  .poker-meta .poker-link::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.45), rgba(255,255,255,0.05));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+  }
+  /* 液态流光：hover 时一道高光扫过 */
+  .poker-meta .poker-link::after {
+    content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255,255,255,0.22), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.55s ease;
+  }
+  .poker-meta .poker-link:hover {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,0.3),
+      inset 0 -10px 20px rgba(139,92,246,0.25),
+      0 10px 32px rgba(139,92,246,0.5);
+  }
+  .poker-meta .poker-link:hover::after { left: 120%; }
+  .poker-hint {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: fit-content; margin: 16px auto 0;
+    padding: 8px 20px; border-radius: 999px;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.16);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
+  }
+  .poker-hint .ico { color: #a5b4fc; }
+  @media (max-width: 560px) {
+    .poker-meta { flex-direction: column; gap: 6px; text-align: center; }
+    .poker-meta .poker-link { margin-left: 0; }
   }
 
   /* ============================================================
@@ -366,11 +486,90 @@
   .edu-card h3 { font-size: 20px; font-weight: 500; }
   .edu-card .tag211 { color: #60a5fa; font-family: ui-monospace, monospace; font-size: 14px; margin-left: 4px; }
   .edu-card .muted { color: rgba(255,255,255,0.4); font-size: 16px; margin-top: 8px; font-family: ui-monospace, monospace; }
-  .cert-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  .cert-card { border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
-  .cert-card img { order: -1; }
-  @media (max-width: 960px) { .cert-list { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .cert-list { grid-template-columns: 1fr; } }
+  /* 荣誉认证：2D 无限循环证书墙（四方向拖拽 + 阻尼惯性，卡片越界无缝循环传送） */
+  .cert-list { display: none; } /* 屏幕上隐藏打印用网格 */
+  /* 拖拽区光标：圆形徽章+对角双箭头图标；JS 激活后改为 DOM 徽章跟随（箭头实时对齐卡片运动方向） */
+  .cert-stage { position: relative; height: 520px; overflow: hidden; border-radius: 16px; user-select: none; -webkit-user-select: none; touch-action: none;
+    isolation: isolate;  /* 舞台自成堆叠上下文：卡片/紫框/DRAG 的 z-index 在本地按 z 值确定性排序，免受合成层重排影响 */
+    --cert-band-w: 32px;  /* 动态紫框粗细唯一来源：横竖四边统一，任意宽高比/视口下恒定 */
+    background: linear-gradient(180deg, rgba(30,36,60,0.72), rgba(12,16,32,0.62));
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),      /* 顶部内高光 */
+      inset 0 -1px 0 rgba(0,0,0,0.45),           /* 底部内阴影，营造面板厚度 */
+      0 4px 14px rgba(0,0,0,0.40),               /* 近距离环境投影 */
+      0 24px 60px rgba(0,0,0,0.55);              /* 远景地面投影 */
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="%23a78bfa" stroke="rgba(0,0,0,0.55)" stroke-width="1"/><path d="M12.6 11.4 16 8M11.8 8H16v4.2M11.4 12.6 8 16M12.2 16H8v-4.2" stroke="rgba(0,0,0,0.8)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, grab; }
+  .cert-stage.badge-on, .cert-stage.badge-on * { cursor: none !important; } /* DOM 徽章接管后隐藏系统光标 */
+  .cert-cursor-badge { position: fixed; left: 0; top: 0; z-index: 60; width: 36px; height: 36px; pointer-events: none; will-change: transform; display: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+  .cert-cursor-badge.dragging circle { fill: #8b5cf6; }
+  .cert-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 70px 10px rgba(0,0,0,0.4); } /* 边缘暗角，暗示可无限拖拽 */
+  /* 霓虹紫拖拽边框（参照视频结构）：默认无框；按住左键（.dragging）时淡入为纯紫实心环，
+     拖拽全程保持静止实心（无流动纹理），松手后淡出复原为无框。
+     厚度引用 --cert-band-w → 横竖四边统一粗细；四周紫色光晕由 box-shadow 内外双向渐隐。 */
+  .cert-stage::before {
+    content: ""; position: absolute; inset: 0; z-index: 280; border-radius: 16px;  /* 极高 z-index：确保紫框压在所有卡片(1~4)之上 */
+    border: var(--cert-band-w) solid #a855f7;   /* 纯紫实心边框 */
+    box-shadow: 0 0 22px rgba(168,85,247,0.45), 0 0 60px rgba(168,85,247,0.22),
+      inset 0 0 22px rgba(168,85,247,0.30);     /* 内外双向紫色光晕 */
+    opacity: 0; transform: scale(1);
+    transition: opacity 0.45s ease, transform 0.32s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;
+  }
+  .cert-stage.dragging::before { opacity: 1; }   /* 按住左键：淡入静止纯紫边框，拖拽期间恒定不变 */
+  .cert-stage.dragging:hover::before { transform: scale(1.03); }    /* 按住时进入/移出拖拽区：放大/缩小 */
+
+  /* DRAG 环绕字样：默认隐藏，按住左键（.dragging）时随边框一起淡入，
+     沿边框一圈排布在紫色边框上；hover 随边框一起放大/缩小 */
+  .cert-drag-ring { position: absolute; inset: 0; z-index: 281; width: 100%; height: 100%; pointer-events: none;  /* 极高 z-index + 纯 2D 合成层：确保 DRAG 压在所有卡片之上 */
+    opacity: 0; transform: scale(1);   /* 移除 translateZ/preserve-3d：避免 3D 上下文导致合成层重排把 DRAG 排到卡片之后 */
+    will-change: opacity;   /* 独立合成层，叠加 isolation 后稳定位于卡片层之上 */
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease; }
+  .cert-drag-ring svg { width: 100%; height: 100%; display: block; }
+  .cert-stage.dragging .cert-drag-ring { opacity: 1; }   /* 按住左键：DRAG 淡入 */
+  .cert-stage.dragging:hover .cert-drag-ring { transform: scale(1.03); }  /* hover 放大时保持纯 2D，不引入 3D 上下文 */
+  
+  .cert-drag-ring text {
+    fill: #f5f3ff; font-size: 16px; font-weight: 700; letter-spacing: 0.16em;
+    dominant-baseline: middle;   /* 关键：字符中线贴合 path（默认 alphabetic 让底部贴 path，主体跑到 border 外面） */
+    alignment-baseline: middle;
+  }
+  /* 拖拽提示浮层（首次拖拽后淡出） */
+  .cert-hint { position: absolute; left: 50%; top: 50%; z-index: 6; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-radius: 999px; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.92); pointer-events: none; transition: opacity 0.5s ease, transform 0.5s ease; animation: hintPulse 2.2s ease-in-out infinite; }
+  .cert-hint svg { flex: 0 0 auto; color: rgba(167,139,250,0.95); }
+  .cert-hint b { display: block; font-size: 14px; font-weight: 500; letter-spacing: 0.06em; }
+  .cert-hint i { display: block; font-style: normal; font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 4px; letter-spacing: 0.08em; }
+  .cert-hint.hide { opacity: 0; transform: translate(-50%, -50%) scale(1.2); animation: none; }
+  @keyframes hintPulse { 50% { transform: translate(-50%, -50%) scale(1.05); } }
+  .cert-cell { position: absolute; left: 0; top: 0; width: 280px; height: 300px; will-change: transform; }
+  .cert-float { width: 100%; height: 100%; animation: certFloat 4.5s ease-in-out infinite alternate; }
+  @keyframes certFloat { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
+  .cert-inner { width: 100%; height: 100%; box-sizing: border-box; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; cursor: inherit; transform-style: preserve-3d; transition: transform 0.15s ease-out, box-shadow 0.3s ease; }
+  /* 拖拽/惯性滑行期间（卡片在动、每帧位移）临时关闭 81 层 backdrop-filter 实时模糊与浮动动画，
+     静止后由 rAF 停止点移除 .moving 复原 —— 静止视觉与原版完全一致，仅运动瞬间去模糊换取流畅 */
+  .cert-stage.moving .cert-inner { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .cert-stage.moving .cert-float { animation-play-state: paused; }
+  .cert-inner.lit { box-shadow: 0 24px 48px rgba(0,0,0,0.55); }
+  .cert-inner img { width: 100%; height: 158px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); pointer-events: none; transition: transform 0.3s ease; }
+  .cert-inner:hover img { transform: scale(1.05); }
+  .cert-cell h3 { font-size: 14px; font-weight: 500; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cert-cell .org { color: rgba(255,255,255,0.7); font-size: 12px; margin: 0; }
+  .cert-cell .muted { color: rgba(255,255,255,0.4); font-size: 11px; margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+  /* 点击放大灯箱 */
+  .cert-lightbox { position: fixed; inset: 0; z-index: 300; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(0,0,0,0.72); backdrop-filter: blur(14px); opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+  .cert-lightbox.open { opacity: 1; pointer-events: auto; }
+  .cert-lightbox img { max-width: min(880px, 88vw); max-height: 72vh; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 32px 80px rgba(0,0,0,0.6); transform: scale(0.85); transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.15); }
+  .cert-lightbox.open img { transform: scale(1); }
+  .cert-lightbox .lb-meta { text-align: center; padding: 0 20px; }
+  .cert-lightbox .lb-meta h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+  .cert-lightbox .lb-meta p { color: rgba(255,255,255,0.6); font-size: 13px; margin: 0; }
+  .cert-lightbox .lb-close { position: absolute; top: 20px; right: 24px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); background: rgba(0,0,0,0.4); color: #fff; font-size: 18px; cursor: pointer; }
+  .cert-lightbox .lb-close:hover { background: rgba(255,255,255,0.15); }
+  @media (max-width: 640px) {
+    .cert-stage { height: 430px; }
+    .cert-cell { width: 218px; height: 252px; }
+    .cert-inner { padding: 12px; }
+    .cert-inner img { height: 122px; }
+  }
   .cert-card h3 { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
   .cert-card .muted { color: rgba(255,255,255,0.4); font-size: 12px; margin-bottom: 4px; font-family: ui-monospace, monospace; word-break: break-all; }
   .cert-card .org { color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 4px; }
@@ -488,6 +687,83 @@
   .deal-overlay .close-hint { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 13px; }
 
   /* ============================================================
+     我能为你做什么（服务菜单 · 行高亮 + 浮动详情卡跟随鼠标）
+     ============================================================ */
+  .svc-list { border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .svc-row {
+    display: flex; align-items: center; gap: 28px;
+    padding: 30px 28px; border-top: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; position: relative; flex-wrap: wrap;
+  }
+  /* 白色线性渐变覆盖层：悬停时从行中央快速向两侧铺开 */
+  .svc-row::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, #fff 8%, #fff 92%, rgba(255,255,255,0) 100%);
+    transform: scaleX(0); transform-origin: center;
+    transition: transform 0.38s cubic-bezier(0.3, 0.9, 0.3, 1);
+    pointer-events: none;
+  }
+  .svc-row.is-hot::before { transform: scaleX(1); }
+  .svc-row > * { position: relative; z-index: 1; }
+  .svc-row .no {
+    font-family: var(--font-serif); font-size: 58px; line-height: 1; flex: none; width: 96px;
+    color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,0.8);
+    transition: color 0.35s ease, -webkit-text-stroke-color 0.35s ease;
+  }
+  .svc-row .tt { min-width: 0; }
+  .svc-row h3 { font-family: var(--font-serif); font-size: 28px; letter-spacing: -0.02em; transition: color 0.35s ease; }
+  .svc-row .en { color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.14em; margin-top: 6px; transition: color 0.35s ease; }
+  .svc-row .meta {
+    margin-left: auto; flex: none; color: rgba(255,255,255,0.4); font-size: 13px;
+    font-family: ui-monospace, monospace; transition: color 0.35s ease;
+  }
+  /* 悬停变色：编号绿色实心 + 文字深色（白色覆盖层铺开时同步过渡） */
+  .svc-row.is-hot .no { color: #22c55e; -webkit-text-stroke-color: transparent; }
+  .svc-row.is-hot h3 { color: #111; }
+  .svc-row.is-hot .en { color: rgba(0,0,0,0.55); }
+  .svc-row.is-hot .meta { color: rgba(0,0,0,0.45); }
+  /* 行内详情（触屏点击展开 / 打印用，桌面由浮动卡代替） */
+  .svc-row .svc-detail { display: none; width: 100%; }
+  .svc-row.open .svc-detail { display: block; padding-top: 16px; animation: svcFade 0.35s ease; }
+  @keyframes svcFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  /* 浮动详情卡：跟随鼠标 + 惯性倾斜（实底深色，避免亮背景导致文字看不清） */
+  .svc-float {
+    position: fixed; left: 0; top: 0; width: 320px; z-index: 60; pointer-events: none;
+    border-radius: 16px; padding: 22px; will-change: transform;
+    background: rgba(12,12,16,0.94);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 20px 48px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.1);
+    opacity: 0; scale: 0.6; transition: opacity 0.25s ease, scale 0.3s ease;
+  }
+  .svc-float.on { opacity: 1; scale: 1; }
+  /* 弹出动效：从触碰点位带旋转弹出，切换行时重新触发 */
+  .svc-float.pop { animation: svcPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  @keyframes svcPop {
+    0% { scale: 0.78; rotate: -5deg; opacity: 0; }
+    40% { opacity: 1; }
+    62% { scale: 1.02; rotate: 1deg; }
+    100% { scale: 1; rotate: 0deg; opacity: 1; }
+  }
+  .svc-float .fh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .svc-float .fh .n { font-family: var(--font-serif); font-size: 24px; color: #22c55e; }
+  .svc-float .fh h4 { font-size: 16px; }
+  .fl-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .fl-list li { display: flex; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.78); line-height: 1.55; }
+  .fl-list li::before { content: "→"; color: #a5b4fc; flex: none; }
+  .svc-float .svc-proof,
+  .svc-row .svc-proof {
+    margin-top: 14px; font-size: 12px; line-height: 1.6;
+    color: rgba(74,222,128,0.85); padding: 8px 11px; border-radius: 10px;
+    background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.18);
+  }
+  @media (max-width: 720px) {
+    .svc-row { gap: 16px; padding: 22px 16px; }
+    .svc-row .no { font-size: 40px; width: 60px; }
+    .svc-row h3 { font-size: 20px; }
+    .svc-float { display: none; }
+  }
+
+  /* ============================================================
      响应式微调 / 打印
      ============================================================ */
   @media (max-width: 720px) {
@@ -503,7 +779,7 @@
     /* 消除入场/滚动动画残留（opacity:0 / 位移 / 模糊） */
     * { opacity: 1 !important; transform: none !important; filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; animation: none !important; transition: none !important; box-shadow: none !important; }
     /* 隐藏悬浮层、媒体与交互控件（视频由 beforeprint 用海报图替代） */
-    .cursor-dot, .cursor-ring, .bg-video, .bg-overlay, .splash, nav, .recruiter-bar, .ai-overlay, .ai-drawer, .deal-overlay, .swiper-tools, video, audio, button, input, textarea, select { display: none !important; }
+    .bg-video, .bg-overlay, .splash, nav, .ai-overlay, .ai-drawer, .deal-overlay, .swiper-tools, video, audio, button, input, textarea, select { display: none !important; }
     /* 背景图不打印 */
     [class*="bg-"] { background-image: none !important; }
     img { max-width: 100% !important; }
@@ -519,17 +795,27 @@
     .hero .rotating { height: auto !important; overflow: visible !important; }
     .hero .rotating-track { transform: none !important; }
     .hero .rotating-track p { height: auto !important; font-size: 44px !important; line-height: 1.15 !important; padding: 2px 0; }
-    .proj-card .t, .proj-card .num, .proj-card .ext { color: #111 !important; text-shadow: none !important; }
+    .poker-card .cap { color: #111 !important; background: none !important; }
     /* 能力雷达图：深色文字与网格线 */
     .radar-svg text { fill: #333 !important; }
     .radar-svg line[stroke*="255,255,255"], .radar-svg polygon[stroke*="255,255,255"] { stroke: #d4d4d4 !important; }
     .radar-svg polygon[fill*="99,102,241"] { fill: rgba(79,70,229,0.12) !important; stroke: #4338ca !important; }
+    /* 我能为你做什么：隐藏浮动卡，行内展开服务清单 */
+    .svc-float { display: none !important; }
+    .svc-row { break-inside: avoid; page-break-inside: avoid; }
+    .svc-row .svc-detail { display: block !important; }
+    .svc-row .no { color: #111 !important; -webkit-text-stroke: 0 !important; }
+    .svc-row h3 { color: #111 !important; }
+    .svc-row .en, .svc-row .meta { color: #555 !important; }
+    .fl-list li { color: #333 !important; }
+    .fl-list li::before { color: #4338ca !important; }
+    .svc-proof { color: #166534 !important; background: #f0fdf4 !important; border-color: #bbf7d0 !important; }
     /* 视频打印时用 beforeprint 注入的海报图替代 */
     .print-video-fallback { display: block !important; width: 100% !important; height: 100% !important; object-fit: cover !important; }
     /* 液体玻璃卡片：浅底细边框，形成清晰层次 */
     .liquid-glass { background: #fafafa !important; border: 1px solid #e3e3e3 !important; box-shadow: none !important; }
     /* 卡片与图片不跨页断裂 */
-    .liquid-glass, .swiper-slide, .cert-card, .edu-card, .proj-card { break-inside: avoid; page-break-inside: avoid; }
+    .liquid-glass, .swiper-slide, .cert-card, .edu-card, .poker-card { break-inside: avoid; page-break-inside: avoid; }
     /* PPT 演示文稿：全部幻灯片缩小为 2 列并排，避免一图一页 */
     .swiper-wrap { overflow: visible !important; height: auto !important; background: none !important; }
     .swiper-track { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; transform: none !important; }
@@ -537,14 +823,18 @@
     .swiper-slide img { object-fit: contain !important; }
     .swiper-slide .cap, .swiper-slide::after { display: none !important; }
     .swiper-info, .swiper-dots { display: none !important; }
-    /* AI 实战作品：四窗格 2x2 放入一页 */
-    .proj-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; break-inside: avoid; page-break-inside: avoid; }
-    .proj-card { height: 150px !important; }
+    /* AI 实战作品：扑克牌摊平为 2x2 网格打印 */
+    .poker-stage { width: auto !important; height: auto !important; margin: 0 !important; display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; break-inside: avoid; page-break-inside: avoid; }
+    .poker-card { position: static !important; width: 100% !important; height: auto !important; aspect-ratio: 16 / 10; }
+    .poker-meta { width: auto !important; }
+    .poker-hint { display: none !important; }
     /* 独特之处：保持多列并排，各子板块各自成页（标题随首块同页，避免空白页） */
     #ufBlocks > div { break-inside: avoid; page-break-inside: avoid; }
     #ufBlocks > div + div { break-before: page; page-break-before: always; }
     .uf-block { margin-bottom: 0 !important; }
-    /* 荣誉认证：3 列并排缩小，卡片内图文纵向排列 */
+    /* 荣誉认证：打印时隐藏证书墙，还原 3 列网格 */
+    .cert-stage { display: none !important; }
+    .cert-lightbox { display: none !important; }
     .cert-list { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; }
     .cert-card { grid-template-columns: 1fr !important; gap: 10px !important; padding: 16px !important; }
     /* 布局：压缩间距、仅大板块另起一页 */
@@ -561,14 +851,10 @@
 </head>
 <body>
 
-<!-- 自定义光标 -->
-<div class="cursor-dot" id="cursorDot"></div>
-<div class="cursor-ring" id="cursorRing"></div>
-
 <!-- 背景壁纸（本地 WebP 海报帧：压缩小、秒开；离线/差网时保证 1s 内出图） -->
 <div class="bg-poster" id="bgPoster"></div>
-<!-- 背景视频（远程 HLS 流，联网自动播放；poster 属性作为首帧前的原生兜底） -->
-<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="none" poster="./src/assets/images/bg-poster.webp"></video>
+<!-- 背景视频（本地 mp4 循环，由脚本设置 src；本地缺失时自动回退远程 HLS 流） -->
+<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="auto" poster="./src/assets/images/bg-poster.webp"></video>
 <div class="bg-overlay"></div>
 
 <!-- BGM 音频（双码率自适应） -->
@@ -576,6 +862,23 @@
 
 <!-- ==================== Splash 启动页 ==================== -->
 <div class="splash" id="splash">
+  <div class="loader" aria-hidden="true">
+    <div class="loader-orbit">
+      <span class="ring"></span>
+      <span class="orbiter"></span>
+      <span class="pct" id="loadPct">0%</span>
+      <svg class="loader-check" viewBox="0 0 36 36" aria-hidden="true">
+        <path d="M11 19l5 5 10-12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </div>
+    <div class="loader-words">
+      <span>Brewing pixels</span>
+      <span>Aligning stars</span>
+      <span>Tuning strings</span>
+      <span>Almost there</span>
+    </div>
+    <div class="loader-dots"><i></i><i></i><i></i></div>
+  </div>
   <h1>高晟哲</h1>
   <p class="tag">Jimmy Gao · Portfolio</p>
   <div class="load-bar"><i id="loadBar"></i></div>
@@ -588,7 +891,7 @@
     <!-- 鼠标追踪光斑 -->
     <div class="nav-glow" id="navGlow" style="position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(100px circle at 50% 50%, rgba(255,255,255,0.12), transparent 70%);transition:opacity .3s;"></div>
     <div class="nav-left">
-      <div class="nav-brand">🌐 高晟哲</div>
+      <div class="nav-brand" role="button" tabindex="0" onclick="window.scrollTo({top:0,behavior:'smooth'})" onkeydown="if(event.key==='Enter')window.scrollTo({top:0,behavior:'smooth'})">🌐 高晟哲</div>
       <div class="nav-links" id="navLinks">
         <button data-target="skills">技术栈</button>
         <button data-target="projects">AI实战作品</button>
@@ -615,9 +918,6 @@
     </div>
   </div>
 </nav>
-
-<!-- 招聘官看板 -->
-<button class="recruiter-bar" onclick="scrollToSection('contact')">招聘官看板</button>
 
 <main>
   <!-- ==================== Hero ==================== -->
@@ -646,6 +946,16 @@
     <div id="contactCard" style="display:none;" class="contact-card liquid-glass"></div>
   </section>
 
+  <!-- ==================== 我能为你做什么（服务菜单） ==================== -->
+  <section id="services" class="reveal">
+    <div class="sec-head">
+      <h2 class="sec-title">我能为你做什么？</h2>
+      <p class="sec-sub">What Can I Do for You · 面向学长、实验室与老师的服务能力菜单</p>
+    </div>
+    <div class="svc-list" id="svcList"></div>
+    <div class="svc-float" id="svcFloat"></div>
+  </section>
+
   <!-- ==================== 技术栈 / 雷达图 ==================== -->
   <section id="skills" class="reveal">
     <div class="sec-head">
@@ -663,7 +973,13 @@
       <h2 class="sec-title">AI实战作品</h2>
       <p class="sec-sub">Interactive Web Experiences</p>
     </div>
-    <div class="proj-grid" id="projGrid"></div>
+    <div class="poker-stage" id="pokerStage"></div>
+    <div class="poker-meta">
+      <span class="poker-num" id="pokerNum"></span>
+      <h3 id="pokerTitle"></h3>
+      <a class="poker-link" id="pokerLink" href="#" target="_blank" rel="noopener noreferrer">访问项目 ↗</a>
+    </div>
+    <p class="poker-hint"><svg class="ico" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 3v6M5.2 5.2 7.4 7.4M12.8 5.2 10.6 7.4M4 11h5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11.5 12.5 20 16l-3.8 1.4L14.6 21z" fill="currentColor"/></svg>CLICK · 点击牌堆换一张</p>
   </section>
 
   <!-- ==================== PPT 演示文稿 ==================== -->
@@ -692,10 +1008,11 @@
     <div class="edu-grid">
       <div class="edu-card liquid-glass">
         <img src="./src/assets/images/erwai.webp" alt="温州第二外国语学校" loading="lazy" decoding="async" />
-        <h3>温州第二外国语学校 <span class="tag211">高中</span></h3>
-        <p style="color:rgba(255,255,255,0.7);">同伴导师 (Peer Mentor) · PMO (Peer Mentoring Organization)</p>
+        <h3>温州市第二外国语学校 <span class="tag211">高中</span></h3>
+        <p style="color:rgba(255,255,255,0.7);">职位：同伴导师 (Peer Mentor) · PMO (Peer Mentoring Organization)</p>
         <p class="desc">利用课余时间为低年级同学提供数学的一对一辅导，耐心解答问题，分享高效学习方法。</p>
-        <p class="desc">团队协作：作为PMO核心成员，参与组织了2场年级范围的"学习方法分享会"，吸引了超过50名同学参加。</p>
+        <p class="desc">团队协作：作为PMO核心成员，参与组织了2场年级范围的"学习方法分享会"，吸引了超过百名同学参加。</p>
+        <p class="muted">2023.9 - 2026.6</p>
       </div>
       <div class="edu-card liquid-glass">
         <img src="./src/assets/images/images.png" alt="太原理工大学" loading="lazy" decoding="async" />
@@ -710,6 +1027,7 @@
     <div class="sec-head">
       <h2 class="sec-title">荣誉认证</h2>
     </div>
+    <div class="cert-stage" id="certStage" role="region" aria-label="荣誉证书墙：按住可四方向无限拖拽"></div>
     <div class="cert-list" id="certList"></div>
   </section>
 
@@ -767,8 +1085,7 @@
   <div class="close-hint">点击空白处关闭</div>
 </div>
 
-<!-- ==================== hls.js（CDN，联网时加载） ==================== -->
-<script async src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" onload="scheduleBgVideo()"></script>
+<!-- hls.js 改由脚本末尾的多源加载器加载：本地副本优先 + CDN 兜底（见 index.html 主脚本尾部 loadHls） -->
 <script>
 /* ============================================================
    工具函数
@@ -780,33 +1097,63 @@ function scrollToSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
   const top = el.getBoundingClientRect().top + window.scrollY - 80;
-  window.scrollTo({ top, behavior: 'smooth' });
+  if (window.WheelDamp) window.WheelDamp.scrollTo(top);
+  else window.scrollTo({ top, behavior: 'smooth' });
 }
 
 /* ============================================================
-   自定义光标（点即时跟手 + 圆环延迟，与原版一致）
+   滚轮滚动阻尼（桌面端整页平滑滚动）
+   - 只拦截 wheel：鼠标滚轮 / 触控板双指；触屏（pointer: coarse）保留原生惯性
+   - 阻尼系数：每帧向目标位置收敛 15%（按帧时长归一化，帧率无关）
+   - 内部滚动容器（AI 对话抽屉等）自动放行
+   - rAF 循环仅在滚动未到位时运行，空闲零占用
    ============================================================ */
-(function initCursor() {
-  const dot = $('#cursorDot'), ring = $('#cursorRing');
-  const target = { x: -100, y: -100 };
-  const ringPos = { x: -100, y: -100 };
-  let raf = 0;
-  document.addEventListener('mousemove', (e) => {
-    target.x = e.clientX; target.y = e.clientY;
-    dot.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 3}px)`;
-  });
-  function animate() {
-    ringPos.x += (target.x - ringPos.x) * 0.08;
-    ringPos.y += (target.y - ringPos.y) * 0.08;
-    ring.style.transform = `translate(${ringPos.x - 16}px, ${ringPos.y - 16}px)`;
-    raf = requestAnimationFrame(animate);
+(function initWheelDamp() {
+  if (matchMedia('(pointer: coarse)').matches) return; // 手机/平板走原生滚动
+  const DAMP = 0.15;              // 阻尼强度：每帧残余 15%，可调（越小越"跟手"，越大越绵）
+  let target = window.scrollY, current = target, raf = 0, lastT = 0;
+
+  const maxScroll = () => document.documentElement.scrollHeight - window.innerHeight;
+
+  // 命中内部可滚动容器（overflow-y: auto/scroll 且可滚）时不劫持
+  function insideScrollable(el) {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight) return true;
+    }
+    return false;
   }
-  // 内存/主线程优化：页面隐藏时暂停 rAF 循环，回到前台再恢复
-  document.addEventListener('visibilitychange', () => {
-    cancelAnimationFrame(raf);
-    if (!document.hidden) raf = requestAnimationFrame(animate);
-  });
-  raf = requestAnimationFrame(animate);
+
+  function loop(now) {
+    const dt = Math.min(now - lastT, 64);
+    lastT = now;
+    current += (target - current) * (1 - Math.pow(1 - DAMP, dt / 16.667));
+    window.scrollTo(0, current);
+    if (Math.abs(target - current) < 0.1) { current = target; window.scrollTo(0, current); raf = 0; return; }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function kick() {
+    if (!raf) { current = window.scrollY; target = Math.max(0, Math.min(target, maxScroll())); lastT = performance.now(); raf = requestAnimationFrame(loop); }
+  }
+
+  window.addEventListener('wheel', (e) => {
+    if (insideScrollable(e.target)) return;
+    e.preventDefault();
+    let dy = e.deltaY;
+    if (e.deltaMode === 1) dy *= 16; else if (e.deltaMode === 2) dy *= window.innerHeight;
+    target = Math.max(0, Math.min(target + dy, maxScroll()));
+    kick();
+  }, { passive: false });
+
+  // 滚动条拖动 / 键盘翻页等原生滚动：同步内部状态
+  window.addEventListener('scroll', () => { if (!raf) current = target = window.scrollY; }, { passive: true });
+
+  // 本模块接管平滑滚动，关闭 CSS scroll-behavior 以免逐帧写入被浏览器二次平滑
+  document.documentElement.style.scrollBehavior = 'auto';
+
+  // 对外 API：导航锚点等程序化滚动也走同一套阻尼
+  window.WheelDamp = { scrollTo(y) { target = Math.max(0, Math.min(y, maxScroll())); kick(); } };
 })();
 
 /* ============================================================
@@ -814,8 +1161,20 @@ function scrollToSection(id) {
    ============================================================ */
 (function initSplash() {
   const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
-  // Splash 显示期间锁定页面滚动
+  const pctEl = $('#loadPct');
+  let lastShown = -1; // 上次展示的百分比，避免每帧重复写 DOM
+  // Splash（loading）期间锁定滚动：overflow 兜底 + 捕获阶段拦截滚轮/触摸/键盘滚动
+  // （捕获阶段执行并 stopImmediatePropagation，避免先注册的 WheelDamp 阻尼模块累积滚动目标导致进入后跳位）
   document.body.style.overflow = 'hidden';
+  const scrollLock = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const keyLock = (e) => {
+    if ([' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault(); e.stopImmediatePropagation();
+    }
+  };
+  window.addEventListener('wheel', scrollLock, { capture: true, passive: false });
+  window.addEventListener('touchmove', scrollLock, { capture: true, passive: false });
+  window.addEventListener('keydown', keyLock, { capture: true });
 
   // 根据网络情况决定最长加载等待：差网多等（6s），好网少等（3s）
   const MAX_WAIT = networkTier() === 'poor' ? 6000 : 3000;
@@ -825,7 +1184,6 @@ function scrollToSection(id) {
   let posterReady = false, posterFailed = false;
   let videoReady = false, audioReady = false, entered = false;
   let dotsTimer = null, dotsCount = 0; // “加载中...” 动态省略号定时器/点数
-  let t = null;
 
   // ① 背景海报帧（本地压缩 WebP，约 37KB）：显式预加载，并精确检测“完全加载显现”
   const poster = new Image();
@@ -835,11 +1193,20 @@ function scrollToSection(id) {
   poster.src = './src/assets/images/bg-poster.webp';
   if (poster.complete && poster.naturalWidth > 0) markPosterReady(); // 命中浏览器缓存时同步判定
 
-  // ② 背景视频（远程 HLS）：后台加载，就绪后叠加播放（增强项，不阻塞进入）
+  // ② 背景视频（远程 HLS）：后台加载；以真实开播（动画动起来）为就绪标准，
+  //    加载失败也放行（渐变底/海报静态兜底），避免按钮永不显现
   const bgVideo = $('#bgVideo');
-  bgVideo.addEventListener('canplay', () => { videoReady = true; onReady(); });
-  bgVideo.addEventListener('playing', () => { $('#bgPoster').style.opacity = '0'; });
+  bgVideo.addEventListener('playing', () => {
+    $('#bgPoster').style.opacity = '0';
+    if (!videoReady) { videoReady = true; onReady(); } // 动画真正开始播放 → 就绪
+  });
+  bgVideo.addEventListener('error', () => { videoReady = true; onReady(); });
   scheduleBgVideo(); // 差网延迟 4s 再起播，优先保证海报帧 + 音乐
+
+  // 跨浏览器兜底：若 hls.js 全部来源加载失败（CDN 不可达等）或视频长时间未开播，
+  // 超时后放行 video 的 20% 进度，避免 Splash 卡在 80%、按钮永不显现；
+  // 视频之后若恢复播放，'playing' 监听仍会将海报淡出并切换为动态背景
+  setTimeout(() => { if (!videoReady) { videoReady = true; onReady(); } }, 8000);
 
   // ③ 音乐（BGM）：本地双码率，Splash 期间即预加载，进入时点击手势下立即出声
   const audio = $('#bgm');
@@ -847,21 +1214,29 @@ function scrollToSection(id) {
   audio.src = networkTier() === 'good' ? './src/assets/audio/bgm.mp3' : './src/assets/audio/bgm-low.mp3';
   audio.load();
   audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
+  audio.addEventListener('error', () => { audioReady = true; onReady(); });
 
-  // 进度条：海报帧 60% + 音频 20% + 视频 20%，与时间进度取较大值
+  // 进度条：海报帧 60% + 音频 20% + 视频开播 20%；全部就绪（背景动画已动起来）才显现按钮，
+  // 时间进度仅用于进度条平滑爬升，不触发按钮显现
   (function fill() {
-    const tElapsed = Math.min(1, (performance.now() - start) / MAX_WAIT);
-    const ready = (posterReady ? 60 : 0) + (audioReady ? 20 : 0) + (videoReady ? 20 : 0);
-    bar.style.width = Math.max(ready, Math.round(tElapsed * 100)) + '%';
+    const ready = (posterReady || posterFailed ? 60 : 0) + (audioReady ? 20 : 0) + (videoReady ? 20 : 0);
+    const tElapsed = Math.min(ready / 100, (performance.now() - start) / MAX_WAIT);
+    const shown = Math.max(ready, Math.round(tElapsed * 100));
+    bar.style.width = shown + '%';
+    if (shown !== lastShown) { pctEl.textContent = shown + '%'; lastShown = shown; } // 仅在数值变化时写 DOM
+    if (ready >= 100) { // 全部就绪 → 显现“点击进入”，加载器切换到打勾就绪态
+      enter.classList.add('ready');
+      splash.classList.add('ready');
+    }
     if (!entered) requestAnimationFrame(fill);
   })();
 
   // 背景图片“已完全加载显现”方可进入（加载失败则以渐变底兜底）
   function canEnter() { return posterReady || posterFailed; }
 
-  // 点击进入：先检测背景图片是否加载完成；未完成则进入“加载中...”动态提示，
-  // 加载完成后按钮恢复“点击进入”，由用户再次点击执行进入
-  splash.addEventListener('click', () => {
+  // 仅点击按钮可进入：按钮未就绪（未满 100%）时不可点；就绪后点击，
+  // 若背景仍未加载完成则进入“加载中...”动态提示，完成后由用户再次点击执行进入
+  enter.addEventListener('click', () => {
     if (canEnter()) enterSite();
     else startDots();
   });
@@ -882,33 +1257,39 @@ function scrollToSection(id) {
     enter.textContent = ENTER_TEXT;
   }
 
-  // 兜底：到 MAX_WAIT 无论如何放行（避免长时间卡在启动页）
-  t = setTimeout(() => enterSite(), MAX_WAIT);
+  // 不再自动放行：时间进度到 100% 后按钮显现，是否进入由用户点击决定
 
   function onReady() {
-    if (canEnter() && !entered) { clearTimeout(t); stopDots(); } // 背景就绪 → 恢复“点击进入”
+    if (canEnter() && !entered) stopDots(); // 背景就绪 → 恢复“点击进入”
     if (entered && audioReady) bgmPlay(); // 已进入且音乐就绪：补起音乐
   }
 
   function enterSite() {
     if (entered) return;
     entered = true;
-    clearTimeout(t);
     stopDots();
-    splash.classList.add('hidden');
+    // 解除 loading 期间的滚动锁定
+    window.removeEventListener('wheel', scrollLock, { capture: true });
+    window.removeEventListener('touchmove', scrollLock, { capture: true });
+    window.removeEventListener('keydown', keyLock, { capture: true });
     document.body.style.overflow = '';
+    splash.classList.add('hidden');
     window.__entered = true;
     bgmPlay(); // 音频已预加载，点击手势下立即出声
   }
 })();
 
 /* ============================================================
-   背景视频：远程 MUX HLS 流（hls.js / Safari 原生）
+   背景视频：本地 mp4 循环（首选） + 远程 MUX HLS 流（兜底，hls.js / Safari 原生）
+   - 本地化原因（跨浏览器兼容）：远程 stream.mux.com 会被 Chrome 端广告拦截类
+     扩展按拦截规则静默拦截（Edge 无扩展故正常），且受 DNS/CDN 可达性影响；
+     本地相对路径资源不受任何扩展/网络环境影响，各浏览器行为完全一致。
    - 壁纸保障：Splash 展示期间即开始缓冲/播放（muted 可自动播放），
-     用户进入时壁纸已就绪；加载失败时保持 CSS 渐变底（不黑屏）。
+     用户进入时壁纸已就绪；本地文件缺失时自动回退远程 HLS，仍失败保持海报（不黑屏）。
    ============================================================ */
 var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
 var __bgVideoScheduled = false;
+var __bgNeedHls = false; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
 // 差网延迟 4s 再起播视频：优先保证海报帧 + 音乐这两个本地资源，避免带宽竞争
 function scheduleBgVideo() {
   if (__bgVideoScheduled) return;
@@ -920,18 +1301,40 @@ function initBgVideo() {
   if (__bgVideoStarted) return;
   const video = $('#bgVideo');
   if (!video) return;
+  __bgVideoStarted = true;
+  // 自动播放加固：muted 同时设置 attribute 与 property（Chrome 自动播放策略
+  // 在 MSE 换源场景下以 property 为准，仅 attribute 可能被判定为非静音而拦截 play()）
+  video.muted = true; video.defaultMuted = true;
+  // 方案 A（首选）：本地 14s 无缝循环背景视频（约 2MB，720p）
+  video.loop = true;
+  video.src = './src/assets/media/bg-loop.mp4';
+  video.addEventListener('error', () => { __bgNeedHls = true; tryStartHls(video); }); // 本地缺失 → 远程兜底
+  video.play().catch(() => {});
+  // 播放看门狗：视频意外暂停（自动播放被拦、标签页节流后未恢复等）时自动续播，
+  // 保证 Splash 的“动画动起来才显示按钮”判定不被卡住（本地循环与 HLS 兜底共用）
+  setInterval(() => {
+    if (document.hidden) return;
+    if (video.readyState >= 3 && video.paused) video.play().catch(() => {});
+  }, 2000);
+}
+// 方案 B（兜底）：远程 MUX HLS 流，仅当本地视频文件缺失时启用
+function tryStartHls(video) {
+  if (!__bgNeedHls || !window.Hls || !Hls.isSupported()) return;
+  __bgNeedHls = false;
   const src = "https://stream.mux.com/kimF2ha9zLrX64H00UgLGPflCzNtl1T0215MlAmeOztv8.m3u8";
-  if (window.Hls && Hls.isSupported()) {
-    __bgVideoStarted = true;
-    const hls = new Hls({ enableWorker: true });
-    hls.loadSource(src);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    __bgVideoStarted = true;
-    video.src = src;
-    video.addEventListener('loadedmetadata', () => video.play().catch(() => {}));
-  }
+  const hls = new Hls({ enableWorker: true });
+  hls.loadSource(src);
+  hls.attachMedia(video);
+  hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+  // 错误明细记录（含非致命）：供 ?bgdebug=1 调试面板展示，定位失败原因
+  hls.on(Hls.Events.ERROR, (_, data) => {
+    (window.__hlsErrLog = window.__hlsErrLog || []).push({
+      type: data.type, details: data.details, fatal: data.fatal,
+      code: data.response && data.response.code,
+    });
+    // 致命错误时向 video 派发 error，让 Splash 的加载完成判定放行（避免按钮永不显现）
+    if (data.fatal) video.dispatchEvent(new Event('error'));
+  });
 }
 
 /* ============================================================
@@ -1052,6 +1455,154 @@ function copyText(btn) {
 }
 
 /* ============================================================
+   我能为你做什么：服务菜单（行高亮 + 浮动详情卡跟随鼠标）
+   ============================================================ */
+(function initServices() {
+  const services = [
+    {
+      num: '01',
+      title: 'AI 工作流与智能体搭建', en: 'AI Workflow & Agents',
+      forWhom: '实验室 / 教授',
+      items: [
+        '多模型 LLM 协同工作流方案设计',
+        '智能体应用原型搭建与演示 Demo',
+        '课题 / 科研场景 AI 辅助工具开发',
+        'Prompt 工程设计与效果调优',
+      ],
+      proof: '背书：OpenAI Academy「Agents and Workflows」结业认证 · 达摩院人工智能训练师（高级）',
+    },
+    {
+      num: '02',
+      title: '网站与交互应用开发', en: 'Web & Interactive Apps',
+      forWhom: '学长项目组 / 团队',
+      items: [
+        '项目官网 / 实验室主页一站式搭建',
+        '在线工具与 H5 互动页面开发',
+        '作品集与个人品牌网站定制',
+        '域名部署与性能优化（Netlify 实战）',
+      ],
+      proof: '背书：4 个已上线项目 · 本站独立开发（原生 JS/CSS 零构建复刻 React 级动效）',
+    },
+    {
+      num: '03',
+      title: '演示设计与视觉表达', en: 'Presentation & Visual',
+      forWhom: '老师 / 课程汇报',
+      items: [
+        '课程汇报 / 竞赛答辩 PPT 设计',
+        '学术海报与数据可视化美化',
+        '演示叙事逻辑梳理与打磨',
+        '原创配图与视觉素材制作',
+      ],
+      proof: '背书：中国美术学院素描捌级 · 全英演示文稿 Freshman\'s Dilemma',
+    },
+    {
+      num: '04',
+      title: '电子创客与 IoT 原型', en: 'Maker & IoT Prototyping',
+      forWhom: '专业课程 / 兴趣小组',
+      items: [
+        '传感器装置原型制作与调试',
+        '循迹小车等智能小车实践',
+        'IoT 课程实验协作与问题排查',
+        '创意硬件小项目孵化与组队',
+      ],
+      proof: '背书：物联网工程专业（211）· 2 件可演示实物作品（循迹小车 / 数码管时钟）',
+    },
+  ];
+  const detailHTML = (s) => `
+    <ul class="fl-list">${s.items.map((it) => `<li>${it}</li>`).join('')}</ul>
+    <div class="svc-proof">${s.proof}</div>`;
+  const list = $('#svcList');
+  list.innerHTML = services.map((s, i) => `
+    <div class="svc-row reveal" data-i="${i}" style="transition-delay:${i * 80}ms;">
+      <span class="no">${s.num}</span>
+      <div class="tt">
+        <h3>${s.title}</h3>
+        <p class="en">+ ${s.en} +</p>
+      </div>
+      <span class="meta">面向 ${s.forWhom}</span>
+      <div class="svc-detail">${detailHTML(s)}</div>
+    </div>`).join('');
+  const rows = $$('#svcList .svc-row');
+  const hoverable = window.matchMedia('(hover: hover)').matches;
+
+  if (hoverable) {
+    // 桌面：仅在实际移动鼠标时激活（mousemove），避免滚轮滚动把元素移入光标下导致的误触发
+    const float = $('#svcFloat');
+    let tx = 0, ty = 0, cx = 0, cy = 0, rot = 0, on = false, raf = null;
+    let activeRow = null;
+    const setTarget = (e) => {
+      const w = float.offsetWidth || 320, h = float.offsetHeight || 280;
+      tx = Math.min(innerWidth - w - 12, Math.max(12, e.clientX + 32));
+      ty = Math.min(innerHeight - h - 12, Math.max(12, e.clientY - h / 2));
+    };
+    const tick = () => {
+      const dx = tx - cx;
+      cx += dx * 0.14; cy += (ty - cy) * 0.14;
+      rot += (Math.max(-10, Math.min(10, dx * 0.09)) - rot) * 0.12;
+      // rotate 用独立属性写入，避免与弹出动画的 rotate 关键帧冲突
+      float.style.transform = `translate(${cx}px, ${cy}px)`;
+      float.style.rotate = `${rot}deg`;
+      raf = (on || Math.abs(tx - cx) > 0.5 || Math.abs(ty - cy) > 0.5) ? requestAnimationFrame(tick) : null;
+    };
+    const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
+    // 统一入口：根据坐标激活 / 切换 / 清除高亮行
+    let mx = -1, my = -1;
+    const rowAt = (x, y) => {
+      const el = document.elementFromPoint(x, y);
+      return el ? el.closest('#svcList .svc-row') : null;
+    };
+    const update = (x, y) => {
+      const row = rowAt(x, y);
+      if (row) {
+        if (row !== activeRow) activate(row, { clientX: x, clientY: y });
+        else if (on) setTarget({ clientX: x, clientY: y });
+      } else if (activeRow) clear();
+    };
+    // 真实鼠标移动
+    window.addEventListener('mousemove', (e) => {
+      mx = e.clientX; my = e.clientY;
+      update(mx, my);
+    }, { passive: true });
+    // 滚轮滚动时光标不动：主动检测光标下是哪一行（不依赖浏览器派发悬停事件）
+    window.addEventListener('scroll', () => { if (mx >= 0) update(mx, my); }, { passive: true });
+    const activate = (row, e) => {
+      activeRow = row;
+      rows.forEach((r) => r.classList.remove('is-hot'));
+      row.classList.add('is-hot');
+      const s = services[+row.dataset.i];
+      float.innerHTML = `<div class="fh"><span class="n">${s.num}</span><h4>${s.title}</h4></div>` + detailHTML(s);
+      setTarget(e);
+      if (!on) {
+        // 首次出现：从触碰点位弹出，随后惯性滑向目标位
+        cx = Math.min(innerWidth - (float.offsetWidth || 320) - 12, Math.max(12, e.clientX));
+        cy = Math.min(innerHeight - (float.offsetHeight || 280) - 12, Math.max(12, e.clientY - (float.offsetHeight || 280) / 2));
+        rot = 0;
+      }
+      on = true;
+      float.classList.add('on');
+      // 每次进入新行都重新触发旋转弹出
+      float.classList.remove('pop');
+      void float.offsetWidth;
+      float.classList.add('pop');
+      kick();
+    };
+    const clear = () => {
+      activeRow = null;
+      rows.forEach((r) => r.classList.remove('is-hot'));
+      on = false;
+      float.classList.remove('on');
+      float.classList.remove('pop');
+    };
+    list.addEventListener('mouseleave', clear);
+  } else {
+    // 触屏：点击行展开 / 收起详情
+    rows.forEach((row) => {
+      row.addEventListener('click', () => row.classList.toggle('open'));
+    });
+  }
+})();
+
+/* ============================================================
    能力雷达图：SVG 网格 + 弹簧展开动画
    ============================================================ */
 (function initRadar() {
@@ -1116,47 +1667,63 @@ function copyText(btn) {
 })();
 
 /* ============================================================
-   AI 实战作品：hover 追踪 + 图片展开
+   AI 实战作品：扑克牌堆叠轮播
+   （交互逻辑学习改造自 github.com/JIEJOE-WEB-Tutorial/001-poker-slides：
+   每张牌记住自己的层位 nums，点击后全员 +1；最顶的牌循环回最底层时
+   瞬间关闭过渡，避免"倒着飞回去"的穿帮——即原教程提到的闪动 BUG 解法）
    ============================================================ */
-(function initProjects() {
+(function initPoker() {
   const projects = [
     { id: '01', title: 'CET-4 英语四级在线模拟', link: 'https://cet-4-online.netlify.app/', img: './src/assets/images/cet4.webp' },
     { id: '02', title: '《飞机大战》', link: 'https://feijidazhan0.netlify.app/', img: './src/assets/images/feijidazhan.webp' },
     { id: '03', title: '《小恐龙跑酷》', link: 'https://xiaokonglong01.netlify.app/', img: './src/assets/images/xiaokonglong.webp' },
-    { id: '04', title: '《坦克大战·GSZ战场》', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.webp' },
+    { id: '04', title: '《坦克大战·GSZ战场》', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.png' },
   ];
-  $('#projGrid').innerHTML = projects.map((p) => `
-    <a class="proj-card liquid-glass" href="${p.link}" target="_blank" rel="noopener noreferrer">
-      <div class="glow"></div>
-      <div class="shot"><img src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" /></div>
-      <div class="info">
-        <span class="num">${p.id}</span>
-        <h3 class="t">${p.title}</h3>
-      </div>
-      <span class="ext">↗</span>
-    </a>`).join('');
-  // 触屏设备：滚动到哪个卡片，哪个卡片就翻动显示图片（无需长按）
-  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  if (isTouch) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => en.target.classList.toggle('in-view', en.isIntersecting));
-    }, { threshold: 0.45 });
-    $$('.proj-card').forEach((card) => io.observe(card));
-  } else {
-    // 桌面端：hover 时图片从鼠标位置展开
-    $$('.proj-card').forEach((card) => {
-      const shot = card.querySelector('.shot');
-      card.addEventListener('mousemove', (e) => {
-        const r = card.getBoundingClientRect();
-        const x = e.clientX - r.left, y = e.clientY - r.top;
-        shot.style.transformOrigin = `${x}px ${y}px`;
-        shot.style.transform = 'scale(1) rotate(0deg)';
-      });
-      card.addEventListener('mouseleave', () => {
-        shot.style.transform = 'scale(0.9) rotate(-6deg)';
-      });
+  const transforms = [
+    'rotate(-9deg)',
+    'rotate(-3deg) translate(38%, -12%)',
+    'rotate(2deg) translate(74%, -20%)',
+    'rotate(7deg) translate(110%, -28%)',
+  ];
+  const stage = $('#pokerStage');
+  stage.innerHTML = projects.map((p, i) => `
+    <div class="poker-card" data-i="${i}">
+      <img src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" />
+      <div class="cap"><span>${p.title}</span></div>
+    </div>`).join('');
+  const cards = [...stage.children];
+  cards.forEach((c, i) => {
+    c.nums = i;
+    c.style.zIndex = i;
+    c.style.transform = transforms[i];
+  });
+  const numEl = $('#pokerNum'), titleEl = $('#pokerTitle'), linkEl = $('#pokerLink');
+  const syncMeta = () => {
+    const top = cards.reduce((a, b) => (b.nums > a.nums ? b : a));
+    const p = projects[+top.dataset.i];
+    numEl.textContent = `${p.id} / 0${projects.length}`;
+    titleEl.textContent = p.title;
+    linkEl.href = p.link;
+  };
+  const move = () => {
+    cards.forEach((ele) => {
+      let nums = ele.nums;
+      if (nums + 1 >= cards.length) {
+        nums = 0;
+        ele.style.transition = ''; // 回到底层：关闭过渡，瞬间落牌
+      } else {
+        nums += 1;
+        ele.style.transition = 'transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      }
+      ele.style.zIndex = nums;
+      ele.style.transform = transforms[nums];
+      ele.nums = nums;
     });
-  }
+    syncMeta();
+  };
+  stage.addEventListener('click', move);
+  $('.poker-hint').addEventListener('click', move); // 点击提示胶囊同样换牌
+  syncMeta();
 })();
 
 /* ============================================================
@@ -1226,6 +1793,287 @@ function copyText(btn) {
       </div>
       <img src="./src/assets/images/${c.img}" alt="${c.name}" loading="lazy" decoding="async" />
     </div>`).join('');
+
+  /* ---- 2D 无限循环证书墙（原理同 JIEJOE/008-infinite-scrolling）----
+     卡片按 cols×rows 铺成一个比可视区大一圈的晶格；拖拽改变共享偏移，
+     每帧把每张卡片对晶格周期取模"传送"回窗口内 —— 平移量恒为间距的整数倍，
+     晶格永远完美对齐，四方向都拖不到尽头。
+     升级点：用帧率无关的阻尼插值替代 GSAP 逐事件动画，松手带惯性滑行。 */
+  const stage = $('#certStage');
+  if (stage) {
+    let cells = [], cols = 0, rows = 0, px = 0, py = 0, cw = 0, ch = 0, W = 0, H = 0, gx = 0, gy = 0;
+    const tgt = { x: 0, y: 0 }, sm = { x: 0, y: 0 }, vel = { x: 0, y: 0 };
+    let dragging = false, raf = 0, lastT = 0, lastMoveT = 0, lastP = null, pid = null;
+    let hoverCell = null, downCell = null, moved = 0;
+
+    const mod = (v, m) => ((v % m) + m) % m;
+
+    /* ---- 拖拽提示浮层（首次拖拽后淡出） ---- */
+    const hint = document.createElement('div');
+    hint.className = 'cert-hint';
+    hint.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="#a78bfa"/><path d="M12.6 11.4 16 8M11.8 8H16v4.2M11.4 12.6 8 16M12.2 16H8v-4.2" stroke="rgba(0,0,0,0.8)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>` +
+      `<span><b>按住拖拽 · 四向无限滑动</b><i>拖动查看更多证书</i></span>`;
+
+    /* ---- DRAG 环绕字样容器（build 时按舞台尺寸生成 SVG textPath，排布在紫色边框正中） ---- */
+    const dragRing = document.createElement('div');
+    dragRing.className = 'cert-drag-ring';
+    let ringTextPath = null, copyTextPath = null, ringPathLen = 0, ringOff = 0;   // 传送带状态：主/副本 textPath 引用、整圈周长、当前沿路径偏移量
+    const RING_SPEED = 40;   // 传送带线性速度（px/s），拖拽触发时沿紫色条带顺时针环移
+
+    /* ---- 光标徽章：替代系统光标，箭头实时对齐卡片整体运动方向 ---- */
+    const badge = document.createElement('div');
+    badge.className = 'cert-cursor-badge';
+    badge.innerHTML = `<svg viewBox="0 0 24 24" width="36" height="36"><circle cx="12" cy="12" r="10.5" fill="#a78bfa" stroke="rgba(0,0,0,0.55)" stroke-width="1"/><path d="M12.6 11.4 16 8M11.8 8H16v4.2M11.4 12.6 8 16M12.2 16H8v-4.2" stroke="rgba(0,0,0,0.8)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    document.body.appendChild(badge);
+    stage.classList.add('badge-on');   // 徽章就绪后隐藏系统光标
+    const badgePos = { x: -100, y: -100 };
+    let badgeRot = -45;                // 基准箭头指向 ↗（-45°）
+    const lerpAngle = (a, b, t) => a + (((b - a + 540) % 360) - 180) * t;
+    function syncBadge() {
+      badge.style.transform = `translate(${badgePos.x - 18}px, ${badgePos.y - 18}px) rotate(${badgeRot.toFixed(2)}deg)`;
+    }
+    function syncBadgeRot(dt) {
+      const sp = Math.hypot(vel.x, vel.y);
+      if (sp > 0.05) {  // 卡片在动：箭头轴对齐实时速度方向（拖拽与惯性滑行均跟随）
+        const target = Math.atan2(vel.y, vel.x) * 180 / Math.PI + 45;
+        badgeRot = lerpAngle(badgeRot, target, 1 - Math.pow(0.65, (dt || 16.7) / 16.667));
+      }
+    }
+    document.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;   // 触屏无光标概念
+      const over = dragging || stage.contains(e.target);
+      badge.style.display = over ? 'block' : 'none';
+      if (!over) return;
+      badgePos.x = e.clientX; badgePos.y = e.clientY;
+      syncBadgeRot(); syncBadge();
+    });
+
+    function build() {
+      const probe = document.createElement('div');
+      probe.className = 'cert-cell';
+      probe.style.visibility = 'hidden';
+      stage.appendChild(probe);
+      cw = probe.offsetWidth; ch = probe.offsetHeight;
+      px = cw + 24;  // 24 = 晶格间距（与视觉留白一致）
+      py = ch + 24;
+      probe.remove();
+      const sw = stage.clientWidth, sh = stage.clientHeight;
+      // 9×9 固定排布周期：晶格边长取 9 的倍数，保证任意相位下 9×9 拉丁方阵无缝循环
+      cols = 9 * Math.max(1, Math.ceil((sw + 2 * px) / (9 * px)));
+      rows = 9 * Math.max(1, Math.ceil((sh + 2 * py) / (9 * py)));
+      W = cols * px; H = rows * py;
+      gx = (sw - W) / 2; gy = (sh - H) / 2;
+      stage.innerHTML = '';
+      cells = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          // 拉丁方阵：行内步进 1、列内步进 4（4 与 9 互质），任意 9×9 范围内
+          // 每行/每列 9 格恰好各出现一次，相邻（含对角）证书互不重复
+          const idx = (4 * (r % 9) + (c % 9)) % certs.length;
+          const d = certs[idx];
+          const el = document.createElement('div');
+          el.className = 'cert-cell';
+          // 负延迟让各卡片浮动相位错开
+          el.innerHTML = `<div class="cert-float" style="animation-delay:${-((r * cols + c) % 9) * 0.5}s">` +
+            `<div class="cert-inner liquid-glass" data-idx="${idx}">` +
+            `<img src="./src/assets/images/${d.img}" alt="${d.name}" loading="lazy" decoding="async" draggable="false" />` +
+            `<h3>${d.name}</h3>${d.issuer ? `<p class="org">${d.issuer}</p>` : ''}` +
+            `</div></div>`;
+          stage.appendChild(el);
+          cells.push({ el, idx, inner: el.querySelector('.cert-inner'), bx: c * px, by: r * py, rx: 0, ry: 0 });
+        }
+      }
+      render();
+      // 生成 DRAG 环绕字样：SVG textPath 沿边框内侧一圈排布 "DRAG · "，贴近边框里侧（不含外）
+      const inset = 22, rad = 16;   // inset 22 > 边框半宽16：把文字整体向内部推移，聚焦于紫色条带内侧；rad 保持圆角半径
+      const rp = (sw, sh) => `M ${inset + rad},${inset}` +
+        ` H ${sw - inset - rad}` +
+        ` Q ${sw - inset},${inset} ${sw - inset},${inset + rad}` +
+        ` V ${sh - inset - rad}` +
+        ` Q ${sw - inset},${sh - inset} ${sw - inset - rad},${sh - inset}` +
+        ` H ${inset + rad}` +
+        ` Q ${inset},${sh - inset} ${inset},${sh - inset - rad}` +
+        ` V ${inset + rad}` +
+        ` Q ${inset},${inset} ${inset + rad},${inset} Z`;
+      dragRing.innerHTML = `<svg viewBox="0 0 ${sw} ${sh}" preserveAspectRatio="none" aria-hidden="true">` +
+        `<defs><path id="certDragPath" d="${rp(sw, sh)}" /></defs>` +
+        `<text class="cert-drag-text"><textPath id="certRingA" href="#certDragPath" startOffset="0"></textPath></text>` +
+        `<text class="cert-drag-text"><textPath id="certRingB" href="#certDragPath" startOffset="0"></textPath></text></svg>`;
+      stage.appendChild(dragRing);
+      // 按路径实际周长动态填充文字量，并用 textLength 精确铺满整圈
+      // （固定 24 组会因周长 > 文字长度导致左侧边框出现无字空段）
+      const ringPath = dragRing.querySelector('#certDragPath');
+      const plen = ringPath.getTotalLength();
+      ringPathLen = plen; ringOff = 0;
+      // 双副本无缝传送带：A、B 各自铺满一整圈。环移时 A 起点 offset=s 覆盖 [s,plen]，
+      // B 起点 offset=s-plen 覆盖 [0,s]，两者无重叠拼接整圈 —— 左侧消失的字由 B 的尾部
+      // 在右侧无缝补全，整圈任意位置始终有字，永不出现缺口或被裁掉
+      const ringA = dragRing.querySelector('#certRingA');
+      const ringB = dragRing.querySelector('#certRingB');
+      // 先在 A 上累加出一份恰好铺满整圈的字符串，再由 A/B 共用同一份 txt，
+      // 保证两份 textPath 几何完全对齐，杜绝双副本错位导致的拖拽抖动/闪现
+      const telA = ringA.closest('text');
+      let txt = 'DRAG · ';
+      ringA.textContent = txt;
+      while (telA.getComputedTextLength() < plen) { txt += 'DRAG · '; ringA.textContent = txt; }
+      ringA.textContent = ringB.textContent = txt;
+      ringA.setAttribute('textLength', Math.round(plen));
+      ringA.setAttribute('lengthAdjust', 'spacing');
+      ringB.setAttribute('textLength', Math.round(plen));
+      ringB.setAttribute('lengthAdjust', 'spacing');
+      ringTextPath = ringA; copyTextPath = ringB;
+      stage.appendChild(hint);  // innerHTML 清空会移除提示浮层，每次 build 后重新挂载
+    }
+
+    function render() {
+      for (const cell of cells) {
+        cell.rx = gx + mod(cell.bx + sm.x - gx, W);
+        cell.ry = gy + mod(cell.by + sm.y - gy, H);
+        cell.el.style.transform = `translate3d(${cell.rx}px,${cell.ry}px,0)`;
+      }
+    }
+
+    function kick() {
+      if (!raf) {
+        stage.classList.add('moving');   // 卡片开始运动：临时去模糊 + 暂停浮动动画
+        // 拖拽前先把双副本 startOffset 一次性铺到当前目标并强制 reflow，
+        // 避免 rAF 首帧才首次渲染负值 offset 导致的"左上角文字冒出"闪现
+        if (ringTextPath && copyTextPath && ringPathLen) {
+          ringTextPath.setAttribute('startOffset', ringOff);
+          copyTextPath.setAttribute('startOffset', ringOff - ringPathLen);
+          void stage.offsetWidth;   // 读取触发强制同步布局，让负 offset 的排版先行就绪
+        }
+        lastT = performance.now(); raf = requestAnimationFrame(loop);
+      }
+    }
+
+    function loop(now) {
+      const dt = Math.min(now - lastT, 64); lastT = now;
+      if (!dragging) {
+        // 惯性：速度按帧率无关的阻尼衰减，低于阈值归零
+        const decay = Math.pow(0.9, dt / 16.667);
+        vel.x *= decay; vel.y *= decay;
+        if (Math.hypot(vel.x, vel.y) < 0.02) vel.x = vel.y = 0;
+        tgt.x += vel.x * dt; tgt.y += vel.y * dt;
+      }
+      // 平滑跟随（阻尼插值，帧率无关）
+      const k = 1 - Math.pow(1 - 0.3, dt / 16.667);
+      sm.x += (tgt.x - sm.x) * k;
+      sm.y += (tgt.y - sm.y) * k;
+      render();
+      // 拖拽触发（DRAG 条带淡入）时，文字沿整圈做“传送带”式顺时针环移；
+      // 文字已 textLength 铺满整圈且首尾衔接，偏移量对周长期取模 → 视觉上无缝、始终停在紫色条带上
+      if (dragging && ringTextPath && ringPathLen) {
+        ringOff = (ringOff + RING_SPEED * dt / 1000) % ringPathLen;
+        // 主副本起点 = s 覆盖 [s,plen]；副本起点 = s-plen 覆盖 [0,s]，无缝拼接整圈
+        ringTextPath.setAttribute('startOffset', ringOff);
+        if (copyTextPath) copyTextPath.setAttribute('startOffset', ringOff - ringPathLen);
+      }
+      // 惯性滑行期指针静止，箭头仍需跟随卡片运动方向旋转
+      if (badge.style.display === 'block') { syncBadgeRot(dt); syncBadge(); }
+      const settled = !dragging && vel.x === 0 && vel.y === 0 &&
+        Math.abs(tgt.x - sm.x) < 0.5 && Math.abs(tgt.y - sm.y) < 0.5;
+      if (settled) {
+        sm.x = tgt.x; sm.y = tgt.y; render();
+        stage.classList.remove('moving');  // 运动停止：恢复毛玻璃与浮动动画
+        raf = 0; return;
+      }
+      raf = requestAnimationFrame(loop);
+    }
+
+    /* ---- 3D 悬浮倾斜：光标相对卡片中心的偏移 → rotateX/rotateY + 抬升 ---- */
+    function findCell(e) {
+      const rect = stage.getBoundingClientRect();   // 指针视口坐标 → 舞台本地坐标
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      for (const cell of cells) {
+        if (x >= cell.rx && x <= cell.rx + cw && y >= cell.ry && y <= cell.ry + ch) return cell;
+      }
+      return null;
+    }
+    function clearTilt() {
+      if (hoverCell) { hoverCell.inner.style.transform = ''; hoverCell.inner.classList.remove('lit'); hoverCell.el.style.zIndex = ''; hoverCell = null; }
+    }
+    function tiltAt(e) {
+      const cell = findCell(e);
+      if (hoverCell && hoverCell !== cell) clearTilt();
+      hoverCell = cell;
+      if (!cell) return;
+      const ix = (e.clientX - cell.rx) / cw - 0.5;   // -0.5 ~ 0.5
+      const iy = (e.clientY - cell.ry) / ch - 0.5;
+      cell.inner.style.transform = `perspective(700px) rotateX(${(-iy * 12).toFixed(2)}deg) rotateY(${(ix * 12).toFixed(2)}deg) translateZ(16px)`;
+      cell.inner.classList.add('lit');
+      cell.el.style.zIndex = 5;
+    }
+
+    /* ---- 点击放大灯箱 ---- */
+    const lb = document.createElement('div');
+    lb.className = 'cert-lightbox';
+    lb.innerHTML = `<button class="lb-close" aria-label="关闭">✕</button>` +
+      `<img alt="" draggable="false" /><div class="lb-meta"><h3></h3><p></p></div>`;
+    document.body.appendChild(lb);
+    const closeLb = () => lb.classList.remove('open');
+    lb.addEventListener('click', (e) => { if (e.target === lb || e.target.closest('.lb-close')) closeLb(); });
+    lb.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true }); // 灯箱打开时滚轮不透传给页面阻尼
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLb(); });
+    function openLb(d) {
+      lb.querySelector('img').src = `./src/assets/images/${d.img}`;
+      lb.querySelector('img').alt = d.name;
+      lb.querySelector('h3').textContent = d.name;
+      lb.querySelector('p').textContent = [d.issuer, d.holder ? '持证：' + d.holder : '', d.id ? 'ID: ' + d.id : '', d.date].filter(Boolean).join(' · ');
+      lb.classList.add('open');
+      badge.style.display = 'none';   // 灯箱打开时隐藏光标徽章
+    }
+
+    stage.addEventListener('pointerdown', (e) => {
+      if (pid !== null) return;
+      hint.classList.add('hide');   // 首次拖拽后提示淡出
+      dragging = true; pid = e.pointerId;
+      lastMoveT = performance.now();
+      lastP = { x: e.clientX, y: e.clientY };
+      moved = 0; downCell = findCell(e);
+      try { stage.setPointerCapture(pid); } catch (_) { } // 指针未激活（如合成事件）时捕获失败可忽略
+      vel.x = vel.y = 0;
+      stage.classList.add('dragging');
+      badge.classList.add('dragging');   // 徽章变深紫表示按住
+      clearTilt();
+      kick();
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (pid === null) { tiltAt(e); return; }   // 未按下：3D 悬浮跟随
+      if (e.pointerId !== pid || !dragging) return;
+      const now = performance.now();
+      const dx = e.clientX - lastP.x, dy = e.clientY - lastP.y;
+      moved += Math.abs(dx) + Math.abs(dy);
+      tgt.x += dx; tgt.y += dy;
+      const dt = now - lastMoveT;
+      if (dt > 0) { vel.x = dx / dt; vel.y = dy / dt; }
+      lastMoveT = now; lastP = { x: e.clientX, y: e.clientY };
+      kick();
+    });
+    const release = (e) => {
+      if (e.pointerId !== pid) return;
+      dragging = false; pid = null;
+      stage.classList.remove('dragging');   // 松手：荧光绿边框淡出
+      badge.classList.remove('dragging');
+      vel.x = Math.max(-4, Math.min(4, vel.x));  // 限速防甩飞
+      vel.y = Math.max(-4, Math.min(4, vel.y));
+      kick();
+      // 位移极小视为点击 → 放大该证书
+      if (moved < 6 && downCell) { openLb(certs[downCell.idx]); clearTilt(); }
+      downCell = null;
+    };
+    stage.addEventListener('pointerup', release);
+    stage.addEventListener('pointercancel', release);
+
+    window.addEventListener('resize', build);
+    // 页面隐藏时暂停循环，回前台按需恢复（空闲零 CPU）
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; stage.classList.remove('moving'); stage.classList.remove('dragging'); }
+      else if (!dragging && (vel.x || vel.y || tgt.x !== sm.x || tgt.y !== sm.y)) kick();
+    });
+
+    build();
+  }
 })();
 
 /* ============================================================
@@ -1342,7 +2190,7 @@ const dealProjects = [
   { id: '01', title: 'CET-4 在线模拟', link: 'https://cet-4-online.netlify.app/', img: './src/assets/images/cet4.webp' },
   { id: '02', title: '飞机大战', link: 'https://feijidazhan0.netlify.app/', img: './src/assets/images/feijidazhan.webp' },
   { id: '03', title: '小恐龙跑酷', link: 'https://xiaokonglong01.netlify.app/', img: './src/assets/images/xiaokonglong.webp' },
-  { id: '04', title: '坦克大战·GSZ', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.webp' },
+  { id: '04', title: '坦克大战·GSZ', link: 'https://jiostrider.github.io/tank/', img: './src/assets/images/tank.png' },
 ];
 function sizeFor() {
   const w = window.innerWidth;
@@ -1642,6 +2490,72 @@ window.addEventListener('beforeprint', () => {
 window.addEventListener('afterprint', () => {
   document.querySelectorAll('.uf-card .media .print-video-fallback').forEach((img) => img.remove());
 });
+
+/* ============================================================
+   背景视频诊断面板（仅 URL 带 ?bgdebug=1 或 #bgdebug 时启用）
+   - 跨浏览器问题定位用：展示 hls.js 实际加载来源、video 状态机、
+     媒体事件时间线、hls.js 错误明细；正常访客零开销、不加载
+   ============================================================ */
+(function bgDebug() {
+  if (!/[?#&]bgdebug/.test(location.search + location.hash)) return;
+  const video = $('#bgVideo');
+  const log = [];
+  const push = (m) => { log.unshift(`[${(performance.now() / 1000).toFixed(1)}s] ${m}`); if (log.length > 40) log.pop(); };
+  ['playing', 'play', 'pause', 'error', 'stalled', 'waiting', 'canplay', 'canplaythrough',
+   'loadeddata', 'loadedmetadata', 'emptied', 'abort', 'suspend', 'ended'].forEach((ev) =>
+    video.addEventListener(ev, () =>
+      push('video.' + ev + (video.error ? ` (code=${video.error.code} ${video.error.message})` : ''))));
+  // 捕获脚本资源加载失败（如 hls.min.js 本地+CDN 全部失败）
+  window.addEventListener('error', (e) => {
+    if (e.target && e.target.tagName === 'SCRIPT') push('script加载失败: ' + (e.target.src || ''));
+  }, true);
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483647;background:rgba(0,0,0,.88);color:#4ade80;font:12px/1.55 Consolas,monospace;padding:10px 12px;border-radius:8px;max-width:460px;white-space:pre-wrap;pointer-events:none;';
+  document.body.appendChild(panel);
+  (function render() {
+    const v = video;
+    panel.textContent =
+`== 背景视频诊断 ==  在线:${navigator.onLine}
+hls.js来源: ${window.__hlsLoadedFrom || '尚未加载成功'}
+Hls可用: ${typeof window.Hls !== 'undefined'} / isSupported: ${window.Hls ? Hls.isSupported() : '-'}
+video: readyState=${v.readyState} networkState=${v.networkState} paused=${v.paused}
+       t=${v.currentTime.toFixed(1)}s size=${v.videoWidth}x${v.videoHeight} muted=${v.muted}
+       src=${(v.currentSrc || '').slice(0, 70)}
+       err=${v.error ? v.error.code + ':' + v.error.message : 'null'}
+hls错误: ${(window.__hlsErrLog || []).length ? '' : '无'}
+${(window.__hlsErrLog || []).slice(-5).map((x) => JSON.stringify(x)).join('\n')}
+-- 事件时间线(新→旧) --
+${log.slice(0, 12).join('\n')}`;
+    setTimeout(render, 1000);
+  })();
+})();
+
+/* ============================================================
+   hls.js 多源加载：本地副本优先 + CDN 逐级兜底（跨浏览器兼容修复）
+   - 原实现仅依赖 cdn.jsdelivr.net 且无 onerror 兜底：Chrome 会话中
+     jsdelivr 不可达（国内网络常见）时 window.Hls 永远不存在，
+     而 Chrome 不支持原生 HLS 播放 → 动态背景静默退化为静态海报
+   - 本地副本（./src/assets/js/hls.min.js）保证任意网络/离线下行为一致；
+     CDN 仅在本地文件缺失时兜底，全部失败则由 Splash 超时兜底放行
+   ============================================================ */
+(function loadHls() {
+  const sources = [
+    './src/assets/js/hls.min.js',
+    'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
+    'https://unpkg.com/hls.js@1/dist/hls.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
+  ];
+  let i = 0;
+  (function next() {
+    if (i >= sources.length) return; // 全部失败：Splash 超时兜底放行，保持海报静态背景
+    const s = document.createElement('script');
+    s.src = sources[i++];
+    s.onload = () => { window.__hlsLoadedFrom = s.src; tryStartHls($('#bgVideo')); scheduleBgVideo(); };
+    s.onerror = () => { s.remove(); next(); };
+    document.head.appendChild(s);
+  })();
+})();
 </script>
 </body>
 </html>
