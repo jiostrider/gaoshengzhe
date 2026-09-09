@@ -21,7 +21,7 @@
   高保真静态单页版 · portfolio.html
   - 复刻 React 作品集全部动效（原生 JS/CSS 实现，零构建依赖）
   - 双击 index.html 同级目录下的本文件即可浏览
-  - 资源均引用本地相对路径；联网时加载 Google Fonts / hls.js CDN
+  - 资源均引用本地相对路径；联网时加载 Google Fonts（hls.js 仅在本地视频缺失兜底时按需加载）
   - 背景视频已本地化（src/assets/media/bg-loop.mp4，约 2MB 循环）；
     远程 MUX HLS 流仅作本地文件缺失时的兜底（需联网）
   ============================================================
@@ -1175,7 +1175,7 @@
   <div class="close-hint">点击空白处关闭</div>
 </div>
 
-<!-- hls.js 改由脚本末尾的多源加载器加载：本地副本优先 + CDN 兜底（见 index.html 主脚本尾部 loadHls） -->
+<!-- hls.js 改为按需懒加载：仅本地 mp4 播放失败时才加载（见主脚本尾部 loadHlsWhenNeeded） -->
 <script>
 /* ============================================================
    工具函数
@@ -1400,7 +1400,7 @@ function initBgVideo() {
   // 方案 A（首选）：本地 14s 无缝循环背景视频（约 2MB，720p）
   video.loop = true;
   video.src = './src/assets/media/bg-loop.mp4';
-  video.addEventListener('error', () => { __bgNeedHls = true; tryStartHls(video); }); // 本地缺失 → 远程兜底
+  video.addEventListener('error', () => { __bgNeedHls = true; loadHlsWhenNeeded(() => tryStartHls(video)); }); // 本地缺失 → 按需加载 hls.js 后走远程兜底
   video.play().catch(() => {});
   // 播放看门狗：视频意外暂停（自动播放被拦、标签页节流后未恢复等）时自动续播，
   // 保证 Splash 的“动画动起来才显示按钮”判定不被卡住（本地循环与 HLS 兜底共用）
@@ -1923,9 +1923,9 @@ document.addEventListener('keydown', (e) => {
    ============================================================ */
 (function initCerts() {
   const certs = [
-    { name: 'Applied AI Foundations 课程结业证书', issuer: 'OpenAI Academy', id: 'ghrhss5fkt', date: '2026.08.26', holder: 'Shengzhe Gao', img: 'cert-applied-ai-foundations.png' },
-    { name: 'Agents and Workflows 课程结业证书', issuer: 'OpenAI Academy', id: 'ze3xowby0q', date: '2026.08.26', holder: 'Shengzhe Gao', img: 'cert-agents-workflows.png' },
-    { name: 'AI Foundations 课程结业证书', issuer: 'OpenAI Academy', id: 'mif4jmueqk', date: '2026.08.25', holder: 'Shengzhe Gao', img: 'cert-unnamed.png' },
+    { name: 'Applied AI Foundations 课程结业证书', issuer: 'OpenAI Academy', id: 'ghrhss5fkt', date: '2026.08.26', holder: 'Shengzhe Gao', img: 'cert-applied-ai-foundations.webp' },
+    { name: 'Agents and Workflows 课程结业证书', issuer: 'OpenAI Academy', id: 'ze3xowby0q', date: '2026.08.26', holder: 'Shengzhe Gao', img: 'cert-agents-workflows.webp' },
+    { name: 'AI Foundations 课程结业证书', issuer: 'OpenAI Academy', id: 'mif4jmueqk', date: '2026.08.25', holder: 'Shengzhe Gao', img: 'cert-unnamed.webp' },
     { name: '达摩院人工智能训练师（高级）', issuer: 'DAMO Academy', id: 'AIT260819181414000127', date: '2026.08.19', img: 'ai-trainer-cert.webp' },
     { name: '达摩院人工智能训练师（初级）', issuer: 'DAMO Academy', id: 'AIT260809225938000178', date: '2026.08.09', img: 'certificate.webp' },
     { name: '阿里云 Apsara Clouder · VISION 人工智能设计（入门）', issuer: 'Alibaba Cloud', id: 'CLDM06260802763267', date: '2026.08.19', img: 'alibaba-cloud-vision-cert.webp' },
@@ -2701,14 +2701,18 @@ ${log.slice(0, 12).join('\n')}`;
 })();
 
 /* ============================================================
-   hls.js 多源加载：本地副本优先 + CDN 逐级兜底（跨浏览器兼容修复）
-   - 原实现仅依赖 cdn.jsdelivr.net 且无 onerror 兜底：Chrome 会话中
-     jsdelivr 不可达（国内网络常见）时 window.Hls 永远不存在，
-     而 Chrome 不支持原生 HLS 播放 → 动态背景静默退化为静态海报
-   - 本地副本（./src/assets/js/hls.min.js）保证任意网络/离线下行为一致；
+   hls.js 按需加载（懒加载）：仅当本地 mp4 播放失败需要远程兜底时才加载
+   - 绝大多数访客走本地 mp4 循环（约 2MB），604KB 的 hls.js 无需下载；
+     仅在本地视频缺失/播放失败时，才按"本地副本优先 + CDN 逐级兜底"加载：
+     本地副本（./src/assets/js/hls.min.js）保证任意网络/离线下行为一致；
      CDN 仅在本地文件缺失时兜底，全部失败则由 Splash 超时兜底放行
+   - __hlsLoadState: 0=未加载 1=加载中 2=就绪（并发调用去重）
    ============================================================ */
-(function loadHls() {
+var __hlsLoadState = 0;
+function loadHlsWhenNeeded(cb) {
+  if (__hlsLoadState === 2) { cb(); return; }
+  if (__hlsLoadState === 1) { document.addEventListener('hls-ready', () => cb(), { once: true }); return; }
+  __hlsLoadState = 1;
   const sources = [
     './src/assets/js/hls.min.js',
     'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
@@ -2720,11 +2724,15 @@ ${log.slice(0, 12).join('\n')}`;
     if (i >= sources.length) return; // 全部失败：Splash 超时兜底放行，保持海报静态背景
     const s = document.createElement('script');
     s.src = sources[i++];
-    s.onload = () => { window.__hlsLoadedFrom = s.src; tryStartHls($('#bgVideo')); scheduleBgVideo(); };
+    s.onload = () => {
+      __hlsLoadState = 2;
+      window.__hlsLoadedFrom = s.src;
+      document.dispatchEvent(new Event('hls-ready'));
+    };
     s.onerror = () => { s.remove(); next(); };
     document.head.appendChild(s);
   })();
-})();
+}
 </script>
 </body>
 </html>
