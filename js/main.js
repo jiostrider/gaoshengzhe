@@ -71,9 +71,9 @@ function scrollToSection(id) {
 })();
 
 /* ============================================================
-   Splash：按设备执行媒体资源门禁 + 点击进入
-   - 桌面端：壁纸、音频、图片、视频全部达到可展示/可连续播放状态后才放行
-   - 移动端：预载背景图、背景视频与主页面视频；普通图片、音频及兴趣弹层视频保持懒加载
+   Splash：媒体资源门禁 + 点击进入
+   - 全设备预载背景图、背景视频与主页面视频
+   - 普通图片、音频及兴趣弹层视频保持懒加载
    - 不用伪时间进度，也不因超时跳过；失败项留在启动页并允许重试
    ============================================================ */
 (function initSplash() {
@@ -95,19 +95,16 @@ function scrollToSection(id) {
   let ready = false, entered = false, loading = false;
   let failedUrls = [];
 
-  // 桌面端预载音频；移动端保持默认静音，并等用户主动开启时才请求音频。
+  // 音频不参与启动预载：桌面端点击进入时按默认开启策略加载播放，
+  // 移动端保持默认静音，等用户主动开启时才请求。
   const audio = $('#bgm');
   primeBgVideo();
+  audio.preload = 'none';
+  audio.removeAttribute('src');
   if (IS_MOBILE_VIEW) {
-    audio.preload = 'none';
-    audio.removeAttribute('src');
     $('#noteIndicator').classList.add('off');
     $('#audioToggle').setAttribute('aria-pressed', 'false');
     $('#audioToggle').setAttribute('aria-label', '背景音乐：已暂停，点击播放');
-  } else {
-    audio.src = './src/assets/audio/bgm-low.mp3';
-    audio.preload = 'auto';
-    audio.load();
   }
 
   // 等本文件后续的同步初始化完成（轮播、证书墙、隐藏弹层均已生成 DOM）再扫描。
@@ -173,36 +170,16 @@ function scrollToSection(id) {
     enter.textContent = '加载中…';
     bar.style.width = '0%'; pctEl.textContent = '0%';
 
-    if (!IS_MOBILE_VIEW) {
-      // 桌面端把延迟地址恢复为真实 src，再由下方门禁统一预载和解码。
-      document.querySelectorAll('img[data-src]').forEach((img) => {
-        img.src = img.dataset.src;
-        img.dataset.loaded = '1';
-        img.loading = 'eager';
-      });
-      document.querySelectorAll('img[src]').forEach((img) => { img.loading = 'eager'; });
-    }
     const imageUrls = new Set();
-    if (IS_MOBILE_VIEW) {
-      // 移动端只把全屏背景图纳入首屏门禁，其余图片交给原生 lazy loading。
-      const bgPoster = $('#bgVideo')?.getAttribute('poster')?.trim();
-      if (bgPoster) imageUrls.add(absoluteUrl(bgPoster));
-    } else {
-      document.querySelectorAll('img[src]').forEach((img) => {
-        const src = img.getAttribute('src').trim();
-        if (src) imageUrls.add(absoluteUrl(src));
-      });
-      document.querySelectorAll('video[poster]').forEach((video) => {
-        const poster = video.getAttribute('poster').trim();
-        if (poster) imageUrls.add(absoluteUrl(poster));
-      });
-    }
+    // 全设备只把全屏背景图纳入首屏图片门禁，其余图片由视口观察器懒加载。
+    const bgPoster = $('#bgVideo')?.getAttribute('poster')?.trim();
+    if (bgPoster) imageUrls.add(absoluteUrl(bgPoster));
 
     const mediaByUrl = new Map();
-    const mediaSelector = IS_MOBILE_VIEW ? 'video[src], video[data-src]' : 'video[src], video[data-src], audio[src]';
+    const mediaSelector = 'video[src], video[data-src]';
     document.querySelectorAll(mediaSelector).forEach((el) => {
-      // 移动端的四个兴趣视频在用户打开弹层时才加载，不占用启动阶段流量。
-      if (IS_MOBILE_VIEW && el.closest('#hobbyModal')) return;
+      // 四个兴趣视频在用户打开弹层时才加载，不占用启动阶段流量。
+      if (el.closest('#hobbyModal')) return;
       const raw = el.dataset.src || el.getAttribute('src');
       if (raw) mediaByUrl.set(absoluteUrl(raw), el);
     });
@@ -1326,12 +1303,11 @@ document.addEventListener('keydown', (e) => {
 })();
 
 /* ============================================================
-   移动端图片懒加载
+   全设备图片懒加载
    - 初始 DOM 只保留 data-src，防止浏览器在启动页阶段抢先请求整页图片
-   - 图片接近视口 500px 时才设置真实 src；桌面端由 Splash 门禁统一处理
+   - 图片接近视口 500px 时才设置真实 src
    ============================================================ */
-(function initMobileLazyImages() {
-  if (!IS_MOBILE_VIEW) return;
+(function initLazyImages() {
   const images = document.querySelectorAll('img[data-src]');
   const load = (img) => {
     if (img.dataset.loaded) return;
@@ -1362,7 +1338,7 @@ document.addEventListener('keydown', (e) => {
     overlay.classList.add('open');
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';   // 锁定背景滚动（触摸/滚动条/键盘）
-    // 移动端兴趣视频到此刻才设置真实地址；桌面端复用启动页已完成的缓冲。
+    // 兴趣视频到此刻才设置真实地址。
     // 直接在用户手势内启动播放，避免隐藏弹层未及时触发 IntersectionObserver。
     modal.querySelectorAll('video').forEach((video) => {
       if (!video.dataset.loaded && video.dataset.src) {
