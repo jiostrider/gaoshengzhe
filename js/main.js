@@ -71,8 +71,9 @@ function scrollToSection(id) {
 })();
 
 /* ============================================================
-   Splash：全站媒体资源门禁 + 点击进入
-   - 页面中的壁纸、音频、图片、视频全部达到可展示/可连续播放状态后才放行
+   Splash：按设备执行媒体资源门禁 + 点击进入
+   - 桌面端：壁纸、音频、图片、视频全部达到可展示/可连续播放状态后才放行
+   - 移动端：预载背景图、背景视频与主页面视频；普通图片、音频及兴趣弹层视频保持懒加载
    - 不用伪时间进度，也不因超时跳过；失败项留在启动页并允许重试
    ============================================================ */
 (function initSplash() {
@@ -94,17 +95,20 @@ function scrollToSection(id) {
   let ready = false, entered = false, loading = false;
   let failedUrls = [];
 
-  // 音频在所有设备都预载；移动端仍保持默认静音，只是不再把下载推迟到进入后。
+  // 桌面端预载音频；移动端保持默认静音，并等用户主动开启时才请求音频。
   const audio = $('#bgm');
   primeBgVideo();
   if (IS_MOBILE_VIEW) {
+    audio.preload = 'none';
+    audio.removeAttribute('src');
     $('#noteIndicator').classList.add('off');
     $('#audioToggle').setAttribute('aria-pressed', 'false');
     $('#audioToggle').setAttribute('aria-label', '背景音乐：已暂停，点击播放');
+  } else {
+    audio.src = './src/assets/audio/bgm-low.mp3';
+    audio.preload = 'auto';
+    audio.load();
   }
-  audio.src = './src/assets/audio/bgm-low.mp3';
-  audio.preload = 'auto';
-  audio.load();
 
   // 等本文件后续的同步初始化完成（轮播、证书墙、隐藏弹层均已生成 DOM）再扫描。
   setTimeout(loadAllAssets, 0);
@@ -169,19 +173,36 @@ function scrollToSection(id) {
     enter.textContent = '加载中…';
     bar.style.width = '0%'; pctEl.textContent = '0%';
 
-    document.querySelectorAll('img[src]').forEach((img) => { img.loading = 'eager'; });
+    if (!IS_MOBILE_VIEW) {
+      // 桌面端把延迟地址恢复为真实 src，再由下方门禁统一预载和解码。
+      document.querySelectorAll('img[data-src]').forEach((img) => {
+        img.src = img.dataset.src;
+        img.dataset.loaded = '1';
+        img.loading = 'eager';
+      });
+      document.querySelectorAll('img[src]').forEach((img) => { img.loading = 'eager'; });
+    }
     const imageUrls = new Set();
-    document.querySelectorAll('img[src]').forEach((img) => {
-      const src = img.getAttribute('src').trim();
-      if (src) imageUrls.add(absoluteUrl(src));
-    });
-    document.querySelectorAll('video[poster]').forEach((video) => {
-      const poster = video.getAttribute('poster').trim();
-      if (poster) imageUrls.add(absoluteUrl(poster));
-    });
+    if (IS_MOBILE_VIEW) {
+      // 移动端只把全屏背景图纳入首屏门禁，其余图片交给原生 lazy loading。
+      const bgPoster = $('#bgVideo')?.getAttribute('poster')?.trim();
+      if (bgPoster) imageUrls.add(absoluteUrl(bgPoster));
+    } else {
+      document.querySelectorAll('img[src]').forEach((img) => {
+        const src = img.getAttribute('src').trim();
+        if (src) imageUrls.add(absoluteUrl(src));
+      });
+      document.querySelectorAll('video[poster]').forEach((video) => {
+        const poster = video.getAttribute('poster').trim();
+        if (poster) imageUrls.add(absoluteUrl(poster));
+      });
+    }
 
     const mediaByUrl = new Map();
-    document.querySelectorAll('video[src], video[data-src], audio[src]').forEach((el) => {
+    const mediaSelector = IS_MOBILE_VIEW ? 'video[src], video[data-src]' : 'video[src], video[data-src], audio[src]';
+    document.querySelectorAll(mediaSelector).forEach((el) => {
+      // 移动端的四个兴趣视频在用户打开弹层时才加载，不占用启动阶段流量。
+      if (IS_MOBILE_VIEW && el.closest('#hobbyModal')) return;
       const raw = el.dataset.src || el.getAttribute('src');
       if (raw) mediaByUrl.set(absoluteUrl(raw), el);
     });
@@ -409,6 +430,90 @@ $('#audioToggle').addEventListener('click', () => {
 })();
 
 /* ============================================================
+   求学之路：滚动绘制轨迹 + 阶段聚焦 + 经历展开
+   ============================================================ */
+(function initEducationJourney() {
+  const route = $('#eduRoute');
+  if (!route) return;
+
+  const path = $('#eduPathProgress');
+  const traveler = $('#eduTraveler');
+  const halo = $('#eduTravelerHalo');
+  const label = $('#eduStageLabel');
+  const count = $('#eduStageCount');
+  const milestones = [...route.querySelectorAll('.edu-milestone')];
+  const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pathLength = path.getTotalLength();
+  let ticking = false;
+
+  path.style.strokeDasharray = `${pathLength}`;
+  path.style.strokeDashoffset = `${pathLength}`;
+
+  function updateJourney() {
+    ticking = false;
+    const rect = route.getBoundingClientRect();
+    const viewportMarker = window.innerHeight * .68;
+    const travelDistance = Math.max(rect.height - window.innerHeight * .28, 1);
+    const progress = Math.max(0, Math.min(1, (viewportMarker - rect.top) / travelDistance));
+
+    route.style.setProperty('--edu-progress', progress.toFixed(3));
+    path.style.strokeDashoffset = `${pathLength * (1 - progress)}`;
+
+    const point = path.getPointAtLength(pathLength * progress);
+    [traveler, halo].forEach((node) => {
+      node.setAttribute('cx', point.x.toFixed(2));
+      node.setAttribute('cy', point.y.toFixed(2));
+    });
+
+    let current = null;
+    milestones.forEach((milestone) => {
+      if (milestone.getBoundingClientRect().top < window.innerHeight * .58) current = milestone;
+    });
+    if (current) {
+      label.textContent = current.dataset.stage;
+      count.textContent = `0${current.dataset.stageIndex} / 02`;
+    } else {
+      label.textContent = '旅程起点';
+      count.textContent = '00 / 02';
+    }
+  }
+
+  function requestJourneyUpdate() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(updateJourney);
+  }
+
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('is-active');
+      });
+    }, { threshold: prefersReducedMotion ? 0 : .22, rootMargin: '0px 0px -12% 0px' });
+    milestones.forEach((milestone) => observer.observe(milestone));
+  } else {
+    milestones.forEach((milestone) => milestone.classList.add('is-active'));
+  }
+
+  route.querySelectorAll('.edu-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const card = button.closest('.edu-card');
+      const detail = document.getElementById(button.getAttribute('aria-controls'));
+      const open = !card.classList.contains('is-open');
+      card.classList.toggle('is-open', open);
+      button.setAttribute('aria-expanded', String(open));
+      button.querySelector('span').textContent = open ? '收起这段经历' : '探索这段经历';
+      if (detail) detail.setAttribute('aria-hidden', String(!open));
+      requestJourneyUpdate();
+    });
+  });
+
+  window.addEventListener('scroll', requestJourneyUpdate, { passive: true });
+  window.addEventListener('resize', requestJourneyUpdate, { passive: true });
+  updateJourney();
+})();
+
+/* ============================================================
    Hero：打字机座右铭 + 联系资料卡片
    ============================================================ */
 (function initHero() {
@@ -435,7 +540,7 @@ $('#audioToggle').addEventListener('click', () => {
   card.innerHTML = `
     <h3>联系方式 <span style="font-weight:400;"><button class="copy-btn" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:12px;" onclick="document.getElementById('contactCard').style.display='none'">关闭</button></span></h3>
     <div class="contact-body">
-      <img class="contact-avatar" src="./src/assets/images/avatar.webp" alt="头像" />
+      <img class="contact-avatar" data-src="./src/assets/images/avatar.webp" alt="头像" loading="lazy" decoding="async" />
       <div class="contact-rows">
         ${contacts.map((c) => {
           const act = c.href ? `window.open('${c.href}','_blank','noopener, noreferrer')`
@@ -734,7 +839,7 @@ document.addEventListener('keydown', (e) => {
   const stage = $('#pokerStage');
   stage.innerHTML = projects.map((p, i) => `
     <div class="poker-card" data-i="${i}">
-      <img src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" />
+      <img data-src="${p.img}" alt="${p.title}" loading="lazy" decoding="async" />
       <div class="cap"><span>${p.title}</span></div>
     </div>`).join('');
   const cards = [...stage.children];
@@ -787,7 +892,7 @@ document.addEventListener('keydown', (e) => {
   const track = $('#pptTrack'), dots = $('#pptDots'), num = $('#pptNum');
   track.innerHTML = slides.map((s, i) => `
     <div class="swiper-slide">
-      <img src="./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp" alt="${s.title}" loading="lazy" decoding="async" />
+      <img data-src="./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp" alt="${s.title}" loading="lazy" decoding="async" />
       <div class="cap">${s.title}</div>
     </div>`).join('');
   dots.innerHTML = slides.map((_, i) => `<i data-i="${i}"></i>`).join('');
@@ -837,7 +942,7 @@ document.addEventListener('keydown', (e) => {
         ${c.id ? `<p class="muted">ID: ${c.id}</p>` : ''}
         ${c.date ? `<p class="muted">日期：${c.date}</p>` : ''}
       </div>
-      <img src="./src/assets/images/${c.img}" alt="${c.name}" loading="lazy" decoding="async" />
+      <img data-src="./src/assets/images/${c.img}" alt="${c.name}" loading="lazy" decoding="async" />
     </div>`).join('');
 
   /* ---- 2D 无限循环证书墙（原理同 JIEJOE/008-infinite-scrolling）----
@@ -923,7 +1028,7 @@ document.addEventListener('keydown', (e) => {
           // 负延迟让各卡片浮动相位错开
           el.innerHTML = `<div class="cert-float" style="animation-delay:${-((r * cols + c) % 9) * 0.5}s">` +
             `<div class="cert-inner liquid-glass" data-idx="${idx}">` +
-            `<img src="./src/assets/images/${d.img}" alt="${d.name}" loading="lazy" decoding="async" draggable="false" />` +
+            `<img data-src="./src/assets/images/${d.img}" alt="${d.name}" loading="lazy" decoding="async" draggable="false" />` +
             `<h3>${d.name}</h3>${d.issuer ? `<p class="org">${d.issuer}</p>` : ''}` +
             `</div></div>`;
           stage.appendChild(el);
@@ -1169,7 +1274,7 @@ document.addEventListener('keydown', (e) => {
       <div class="uf-grid col3">
         ${art.map((a) => `
           <div class="uf-card liquid-glass col3">
-            <div class="media"><img src="${a.img}" alt="${a.title}" loading="lazy" decoding="async" /></div>
+            <div class="media"><img data-src="${a.img}" alt="${a.title}" loading="lazy" decoding="async" /></div>
             <div class="body"><h4>${a.title}</h4><p class="desc">${a.desc}</p>
             ${a.issuer ? `<span class="badge-dark">${a.issuer}</span>` : ''}</div>
           </div>`).join('')}
@@ -1181,7 +1286,7 @@ document.addEventListener('keydown', (e) => {
       <div class="uf-grid">
         ${volunteer.map((v) => `
           <div class="uf-card liquid-glass">
-            <div class="media"><img src="${v.img}" alt="${v.title}" loading="lazy" decoding="async" /></div>
+            <div class="media"><img data-src="${v.img}" alt="${v.title}" loading="lazy" decoding="async" /></div>
             <div class="body"><h4>${v.title}</h4><p class="desc">${v.desc}</p>
             <div style="display:flex;justify-content:space-between;margin-top:12px;">
               <span class="badge-dark">${v.detail}</span>
@@ -1221,6 +1326,33 @@ document.addEventListener('keydown', (e) => {
 })();
 
 /* ============================================================
+   移动端图片懒加载
+   - 初始 DOM 只保留 data-src，防止浏览器在启动页阶段抢先请求整页图片
+   - 图片接近视口 500px 时才设置真实 src；桌面端由 Splash 门禁统一处理
+   ============================================================ */
+(function initMobileLazyImages() {
+  if (!IS_MOBILE_VIEW) return;
+  const images = document.querySelectorAll('img[data-src]');
+  const load = (img) => {
+    if (img.dataset.loaded) return;
+    img.src = img.dataset.src;
+    img.dataset.loaded = '1';
+  };
+  if (!('IntersectionObserver' in window)) {
+    images.forEach(load);
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      load(entry.target);
+      observer.unobserve(entry.target);
+    });
+  }, { rootMargin: '500px 0px' });
+  images.forEach((img) => observer.observe(img));
+})();
+
+/* ============================================================
    兴趣爱好弹层：入口卡片 ↔ 隐藏板块
    ============================================================ */
 (function initHobbyModal() {
@@ -1230,9 +1362,17 @@ document.addEventListener('keydown', (e) => {
     overlay.classList.add('open');
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';   // 锁定背景滚动（触摸/滚动条/键盘）
-    // 视频已在启动页完成缓冲；弹层由用户手势打开时立即播放，避免浏览器未及时
-    // 重新触发 IntersectionObserver 而停在海报帧。
-    modal.querySelectorAll('video[data-loaded="1"]').forEach((video) => video.play().catch(() => {}));
+    // 移动端兴趣视频到此刻才设置真实地址；桌面端复用启动页已完成的缓冲。
+    // 直接在用户手势内启动播放，避免隐藏弹层未及时触发 IntersectionObserver。
+    modal.querySelectorAll('video').forEach((video) => {
+      if (!video.dataset.loaded && video.dataset.src) {
+        video.src = video.dataset.src;
+        video.preload = 'auto';
+        video.dataset.loaded = '1';
+        video.load();
+      }
+      video.play().catch(() => {});
+    });
   };
   const close = () => {
     overlay.classList.remove('open');

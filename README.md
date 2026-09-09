@@ -43,8 +43,8 @@
 样式与脚本使用版本参数避免浏览器缓存旧文件：
 
 ```html
-<link rel="stylesheet" href="./css/styles.css?v=20260909.2" />
-<script src="./js/main.js?v=20260909.2" defer></script>
+<link rel="stylesheet" href="./css/styles.css?v=20260910.1" />
+<script src="./js/main.js?v=20260910.1" defer></script>
 ```
 
 修改 CSS 或 JavaScript 并部署时，请同步更新这两个 `v=` 版本号。

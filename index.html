@@ -32,18 +32,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" /></noscript>
-<link rel="stylesheet" href="./css/styles.css?v=20260909.3" />
+<link rel="stylesheet" href="./css/styles.css?v=20260910.1" />
 </head>
 <body>
 
 <!-- CSS 动态底景：视频尚未出帧时保持画面，不使用静态海报图 -->
 <div class="bg-base" aria-hidden="true"></div>
 <!-- 背景视频（启动页预加载，点击进入后播放；本地缺失时自动回退远程 HLS 流） -->
-<video class="bg-video" id="bgVideo" muted loop playsinline preload="auto"></video>
+<video class="bg-video" id="bgVideo" muted loop playsinline preload="auto" poster="./src/assets/images/bg-poster.webp"></video>
 <div class="bg-overlay"></div>
 
 <!-- BGM 音频（默认开启，使用低码率版本） -->
-<audio id="bgm" loop preload="auto"></audio>
+<audio id="bgm" loop preload="none"></audio>
 
 <!-- ==================== Splash 启动页 ==================== -->
 <div class="splash" id="splash">
@@ -132,7 +132,7 @@
         <p>永远进步</p>
       </div>
     </div>
-    <p class="desc">太原理工大学物联网工程本科大一新生。对人工智能应用具有高度热情，擅长运用多模型大语言模型协同工作流。</p>
+    <p class="desc">太原理工大学物联网工程本科生 · 2026 高考 636 分<br>专注人工智能应用与多模型协同工作流。</p>
     <div class="hero-btns" id="heroBtns">
       <button class="pill-btn liquid-glass" id="openAIBtn"><svg class="icon" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1"/><path d="M9 12.5h.01M15 12.5h.01"/><path d="M9.5 15.5h5"/><path d="M2.5 11v4M21.5 11v4"/></svg>与 AI 数字分身对话</button>
       <button class="pill-btn liquid-glass" id="contactBtn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 8 9 6 9-6"/></svg>获取联系资料</button>
@@ -211,23 +211,85 @@
 
   <!-- ==================== 求学之路 & 荣誉认证 ==================== -->
   <section id="education" class="reveal">
-    <div class="sec-head">
+    <div class="sec-head edu-head">
+      <p class="edu-kicker">EDUCATION JOURNEY · 2023 — 2030</p>
       <h2 class="sec-title">求学之路</h2>
+      <p class="sec-sub">沿着时间向前，每一次选择都成为下一程的起点。</p>
     </div>
-    <div class="edu-grid">
-      <div class="edu-card liquid-glass">
-        <img src="./src/assets/images/erwai.webp" alt="温州第二外国语学校" loading="lazy" decoding="async" />
-        <h3>温州市第二外国语学校 <span class="tag211">高中</span></h3>
-        <p style="color:rgba(255,255,255,0.7);">职位：同伴导师 (Peer Mentor) · PMO (Peer Mentoring Organization)</p>
-        <p class="desc">利用课余时间为低年级同学提供数学的一对一辅导，耐心解答问题，分享高效学习方法。</p>
-        <p class="desc">团队协作：作为PMO核心成员，参与组织了2场年级范围的"学习方法分享会"，吸引了超过百名同学参加。</p>
-        <p class="muted">2023.9 - 2026.6</p>
+    <div class="edu-route" id="eduRoute">
+      <div class="edu-route-status" aria-live="polite">
+        <span class="edu-status-dot"></span>
+        <span id="eduStageLabel">旅程起点</span>
+        <strong id="eduStageCount">00 / 02</strong>
       </div>
-      <div class="edu-card liquid-glass">
-        <img src="./src/assets/images/images.png" alt="太原理工大学" loading="lazy" decoding="async" />
-        <h3>太原理工大学 <span class="tag211">211 双一流</span></h3>
-        <p style="color:rgba(255,255,255,0.7);">物联网工程 / 本科在读</p>
-        <p class="muted">2026.9 - 2030.6（预计）</p>
+
+      <svg class="edu-path" viewBox="0 0 1000 1160" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="eduPathGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#67e8f9" />
+            <stop offset="52%" stop-color="#8b5cf6" />
+            <stop offset="100%" stop-color="#c084fc" />
+          </linearGradient>
+          <filter id="eduPathGlow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <path class="edu-path-base" d="M500 8 C165 165 170 360 500 520 S845 875 500 1080" />
+        <path class="edu-path-progress" id="eduPathProgress" d="M500 8 C165 165 170 360 500 520 S845 875 500 1080" />
+        <circle class="edu-traveler-halo" id="eduTravelerHalo" cx="500" cy="8" r="19" />
+        <circle class="edu-traveler" id="eduTraveler" cx="500" cy="8" r="6" />
+      </svg>
+
+      <article class="edu-milestone edu-milestone-high" data-stage="高中" data-stage-index="1">
+        <div class="edu-card liquid-glass">
+          <div class="edu-card-topline">
+            <span class="edu-index">01</span>
+            <span class="edu-period">2023.09 — 2026.06</span>
+          </div>
+          <div class="edu-node" aria-hidden="true"><i></i><span>高中</span></div>
+          <h3>温州市第二外国语学校</h3>
+          <p class="edu-summary">在帮助他人学习的过程中，也重新理解了学习本身。</p>
+          <div class="edu-detail" id="eduDetailHigh" aria-hidden="true">
+            <div class="edu-detail-inner">
+              <p class="gaokao-score"><span>浙江省</span><strong>2026 高考 · 636 分</strong></p>
+              <p class="edu-role">同伴导师 <span>Peer Mentor · PMO</span></p>
+              <p>利用课余时间为低年级同学提供数学一对一辅导，耐心解答问题，分享高效学习方法。</p>
+              <p>作为 PMO 核心成员，参与组织 2 场年级“学习方法分享会”，吸引超过百名同学参加。</p>
+            </div>
+          </div>
+          <button class="edu-toggle" type="button" aria-expanded="false" aria-controls="eduDetailHigh">
+            <span>探索这段经历</span><i aria-hidden="true"></i>
+          </button>
+        </div>
+      </article>
+
+      <article class="edu-milestone edu-milestone-university" data-stage="大学" data-stage-index="2">
+        <div class="edu-card liquid-glass">
+          <div class="edu-card-topline">
+            <span class="edu-index">02</span>
+            <span class="edu-period">2026.09 — 2030.06 <small>预计</small></span>
+          </div>
+          <div class="edu-node" aria-hidden="true"><i></i><span>大学</span></div>
+          <h3>太原理工大学</h3>
+          <p class="edu-summary">从校园走向更广阔的技术世界，下一阶段正在展开。</p>
+          <div class="edu-detail" id="eduDetailUniversity" aria-hidden="true">
+            <div class="edu-detail-inner">
+              <p class="edu-major">物联网工程 <span>本科在读</span></p>
+              <p class="edu-badge">211 · 双一流</p>
+              <p>以物联网工程为新的起点，继续探索软硬件融合与人工智能应用。</p>
+            </div>
+          </div>
+          <button class="edu-toggle" type="button" aria-expanded="false" aria-controls="eduDetailUniversity">
+            <span>探索这段经历</span><i aria-hidden="true"></i>
+          </button>
+        </div>
+      </article>
+
+      <div class="edu-to-be-continued">
+        <span class="edu-future-ring" aria-hidden="true"></span>
+        <p>未完待续</p>
+        <small>THE JOURNEY CONTINUES</small>
       </div>
     </div>
   </section>
@@ -278,11 +340,11 @@
   </div>
   <div class="footer-qr">
     <div class="qr-item">
-      <img src="./src/assets/media/wechat-qr.jpg" alt="微信二维码" />
+      <img data-src="./src/assets/media/wechat-qr.jpg" alt="微信二维码" loading="lazy" decoding="async" />
       <span class="qr-label"><svg class="icon" viewBox="0 0 24 24"><path d="M9.6 4.3C6.5 4.3 4 6.4 4 9.1c0 1.5.7 2.8 1.9 3.7l-.6 2.2 2.4-1.3c.6.2 1.2.3 1.9.3"/><path d="M14.4 8.6c-3.2 0-5.8 2.1-5.8 4.7 0 2.6 2.6 4.7 5.8 4.7.7 0 1.3-.1 1.9-.3l2.4 1.2-.6-2.1c1.2-.9 1.9-2.2 1.9-3.6 0-2.6-2.6-4.7-5.6-4.6z"/><path d="M6.8 9.2h.01M9.2 9.2h.01M12.7 13.1h.01M16.6 13.1h.01"/></svg>微信</span>
     </div>
     <div class="qr-item">
-      <img src="./src/assets/media/qq.webp" alt="QQ二维码" />
+      <img data-src="./src/assets/media/qq.webp" alt="QQ二维码" loading="lazy" decoding="async" />
       <span class="qr-label"><svg class="icon" viewBox="0 0 24 24"><path d="M10.17 3.33 L8.91 4.04 L8.13 4.74 L7.39 5.7 L6.76 6.96 L6.35 8.44 L6.28 10.59 L5.17 13.22 L4.54 15.48 L4.39 16.63 L4.5 17.59 L4.61 17.74 L5.17 17.26 L6.13 15.81 L6.35 17.07 L6.65 17.78 L7.31 18.74 L8.06 19.41 L6.83 19.89 L6.39 20.26 L6.35 20.59 L6.91 20.85 L9.13 20.96 L12.43 20.7 L14.2 20.93 L16.13 20.96 L17.31 20.78 L17.54 20.67 L17.65 20.44 L17.28 20.0 L15.91 19.41 L16.5 18.89 L17.13 18.07 L17.61 17.0 L17.8 15.85 L18.69 17.15 L19.31 17.74 L19.5 17.48 L19.57 16.7 L19.43 15.52 L18.98 13.81 L17.65 10.48 L17.61 8.59 L17.09 6.74 L16.65 5.85 L15.98 4.93 L15.13 4.11 L14.13 3.48 L13.2 3.15 L12.31 3.0 L11.28 3.04 Z"/></svg>QQ</span>
     </div>
   </div>
@@ -324,6 +386,6 @@
 </div>
 
 <!-- hls.js 改为按需懒加载：仅本地 mp4 播放失败时才加载（见主脚本尾部 loadHlsWhenNeeded） -->
-<script src="./js/main.js?v=20260909.3" defer></script>
+<script src="./js/main.js?v=20260910.1" defer></script>
 </body>
 </html>
