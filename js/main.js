@@ -94,34 +94,26 @@ function scrollToSection(id) {
   const start = performance.now();
   const ENTER_TEXT = '点击进入';    // 按钮就绪文案
   const LOADING_TEXT = '加载中';    // 按钮加载文案（末尾省略号动态追加）
-  let videoReady = false, audioReady = false, entered = false;
+  let audioReady = false, entered = false;
   let dotsTimer = null, dotsCount = 0; // “加载中...” 动态省略号定时器/点数
 
-  // ① 背景视频：以真实开播（动画动起来）为就绪标准；加载失败也放行，避免启动页卡住。
-  const bgVideo = $('#bgVideo');
-  bgVideo.addEventListener('playing', () => {
-    if (!videoReady) { videoReady = true; onReady(); } // 动画真正开始播放 → 就绪
-  });
-  bgVideo.addEventListener('error', () => { videoReady = true; onReady(); });
-  scheduleBgVideo();
-
-  // 跨浏览器兜底：若 hls.js 全部来源加载失败（CDN 不可达等）或视频长时间未开播，
-  // 超时后放行视频进度，避免启动页一直等待网络。
-  setTimeout(() => { if (!videoReady) { videoReady = true; onReady(); } }, 8000);
+  // ① 背景视频仅在访客点击进入后加载，避免启动页预先消耗视频带宽。
 
   // ② 音乐（BGM）：Splash 期间预加载，进入时点击手势下立即出声
   const audio = $('#bgm');
   audio.preload = 'auto';
-  audio.src = networkTier() === 'good' ? './src/assets/audio/bgm.mp3' : './src/assets/audio/bgm-low.mp3';
+  audio.src = './src/assets/audio/bgm-low.mp3';
   audio.load();
   audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
   audio.addEventListener('error', () => { audioReady = true; onReady(); });
+  // 慢网或音频请求停滞时仍允许进入，点击后继续尝试播放。
+  setTimeout(() => { if (!audioReady) { audioReady = true; onReady(); } }, MAX_WAIT);
 
-  // 进度条：视频 70% + 音频 30%；全部就绪才显现按钮，
+  // 进度条以默认开启的背景音乐为准；视频会在进入网站后再加载。
   // 时间进度仅用于进度条平滑爬升，不触发按钮显现
   (function fill() {
-    const ready = (videoReady ? 70 : 0) + (audioReady ? 30 : 0);
-    const tElapsed = Math.min(ready / 100, (performance.now() - start) / MAX_WAIT);
+    const ready = audioReady ? 100 : 0;
+    const tElapsed = Math.min(0.95, (performance.now() - start) / MAX_WAIT);
     const shown = Math.max(ready, Math.round(tElapsed * 100));
     bar.style.width = shown + '%';
     if (shown !== lastShown) { pctEl.textContent = shown + '%'; lastShown = shown; } // 仅在数值变化时写 DOM
@@ -132,8 +124,8 @@ function scrollToSection(id) {
     if (!entered) requestAnimationFrame(fill);
   })();
 
-  // 动态背景已就绪（或超时放行）后即可进入。
-  function canEnter() { return videoReady; }
+  // 音乐准备完成后即可进入；动态背景在进入后才开始加载。
+  function canEnter() { return audioReady; }
 
   // 仅点击按钮可进入：按钮未就绪（未满 100%）时不可点；就绪后点击，
   // 若背景仍未加载完成则进入“加载中...”动态提示，完成后由用户再次点击执行进入
@@ -162,7 +154,6 @@ function scrollToSection(id) {
 
   function onReady() {
     if (canEnter() && !entered) stopDots(); // 背景就绪 → 恢复“点击进入”
-    if (entered && audioReady) bgmPlay(); // 已进入且音乐就绪：补起音乐
   }
 
   function enterSite() {
@@ -176,6 +167,7 @@ function scrollToSection(id) {
     document.body.style.overflow = '';
     splash.classList.add('hidden');
     window.__entered = true;
+    scheduleBgVideo();
     bgmPlay(); // 音频已预加载，点击手势下立即出声
   }
 })();
@@ -185,18 +177,17 @@ function scrollToSection(id) {
    - 本地化原因（跨浏览器兼容）：远程 stream.mux.com 会被 Chrome 端广告拦截类
      扩展按拦截规则静默拦截（Edge 无扩展故正常），且受 DNS/CDN 可达性影响；
      本地相对路径资源不受任何扩展/网络环境影响，各浏览器行为完全一致。
-   - Splash 展示期间即开始缓冲/播放（muted 可自动播放），用户进入时动态背景已就绪；
-     本地文件缺失时自动回退远程 HLS，全部失败时保留深色底色。
+   - 用户点击进入后才开始加载背景视频；本地文件缺失时自动回退远程 HLS，
+     全部失败时保留深色底色。
    ============================================================ */
 var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
 var __bgVideoScheduled = false;
 var __bgNeedHls = false; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
-// 差网延迟 4s 再起播视频，避免与音乐资源同时争抢带宽。
+// 仅在用户进入网站后启动视频，避免首屏加载阶段的带宽竞争。
 function scheduleBgVideo() {
   if (__bgVideoScheduled) return;
   __bgVideoScheduled = true;
-  const delay = networkTier() === 'poor' ? 4000 : 0;
-  setTimeout(() => { __bgVideoScheduled = false; initBgVideo(); }, delay);
+  setTimeout(() => { __bgVideoScheduled = false; initBgVideo(); }, 0);
 }
 function initBgVideo() {
   if (__bgVideoStarted) return;
@@ -206,7 +197,7 @@ function initBgVideo() {
   // 自动播放加固：muted 同时设置 attribute 与 property（Chrome 自动播放策略
   // 在 MSE 换源场景下以 property 为准，仅 attribute 可能被判定为非静音而拦截 play()）
   video.muted = true; video.defaultMuted = true;
-  // 方案 A（首选）：本地 14s 无缝循环背景视频（约 2MB，720p）
+  // 方案 A（首选）：本地 14s 循环背景视频（约 0.72MiB，720p，faststart）
   video.loop = true;
   video.src = './src/assets/media/bg-loop.mp4';
   video.addEventListener('error', () => { __bgNeedHls = true; loadHlsWhenNeeded(() => tryStartHls(video)); }); // 本地缺失 → 按需加载 hls.js 后走远程兜底
@@ -239,10 +230,9 @@ function tryStartHls(video) {
 }
 
 /* ============================================================
-   BGM：双码率自适应 + 音乐开关
+   BGM：单一低码率版本 + 音乐开关
    ============================================================ */
-const SRC_HIGH = './src/assets/audio/bgm.mp3';
-const SRC_LOW = './src/assets/audio/bgm-low.mp3';
+const BGM_SRC = './src/assets/audio/bgm-low.mp3';
 let audioOn = true;
 
 function networkTier() {
@@ -256,7 +246,7 @@ function bgmPlay() {
   const audio = $('#bgm');
   if (!audioOn) return;
   // Splash 期间已设置源并预加载；这里不重复设置 src，避免重新缓冲
-  if (!audio.getAttribute('src')) audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW;
+  if (!audio.getAttribute('src')) audio.src = BGM_SRC;
   audio.volume = 1;
   audio.play().catch(() => {});
 }
@@ -267,7 +257,7 @@ $('#audioToggle').addEventListener('click', () => {
   const btn = $('#audioToggle'); // 同步无障碍状态
   btn.setAttribute('aria-pressed', audioOn);
   btn.setAttribute('aria-label', audioOn ? '背景音乐：播放中' : '背景音乐：已暂停，点击播放');
-  if (audioOn) { audio.src = networkTier() === 'good' ? SRC_HIGH : SRC_LOW; audio.play().catch(() => {}); }
+  if (audioOn) bgmPlay(); // 沿用已加载的音源和播放位置，避免重新下载。
   else audio.pause();
 });
 

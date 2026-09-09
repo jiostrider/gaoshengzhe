@@ -23,7 +23,7 @@
   - 双击 index.html 同级目录下的本文件即可浏览
   - 代码结构：HTML 结构（本文件）+ css/styles.css（样式）+ js/main.js（逻辑，defer 加载）
   - 资源均引用本地相对路径；联网时加载 Google Fonts（hls.js 仅在本地视频缺失兜底时按需加载）
-  - 背景视频已本地化（src/assets/media/bg-loop.mp4，约 2MB 循环）；
+  - 背景视频已本地化（src/assets/media/bg-loop.mp4，约 0.72MiB 循环）；
     远程 MUX HLS 流仅作本地文件缺失时的兜底（需联网）
   ============================================================
 -->
@@ -40,7 +40,7 @@
 <video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="auto"></video>
 <div class="bg-overlay"></div>
 
-<!-- BGM 音频（双码率自适应） -->
+<!-- BGM 音频（默认开启，使用低码率版本） -->
 <audio id="bgm" loop preload="none"></audio>
 
 <!-- ==================== Splash 启动页 ==================== -->
