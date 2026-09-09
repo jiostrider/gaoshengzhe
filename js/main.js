@@ -3,6 +3,7 @@
    ============================================================ */
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
+const IS_MOBILE_VIEW = window.matchMedia('(max-width: 768px)').matches;
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -99,15 +100,23 @@ function scrollToSection(id) {
 
   // ① 背景视频仅在访客点击进入后加载，避免启动页预先消耗视频带宽。
 
-  // ② 音乐（BGM）：Splash 期间预加载，进入时点击手势下立即出声
+  // ② 音乐：桌面端预加载并默认播放；手机端默认关闭，用户点按音符后才加载。
   const audio = $('#bgm');
-  audio.preload = 'auto';
-  audio.src = './src/assets/audio/bgm-low.mp3';
-  audio.load();
-  audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
-  audio.addEventListener('error', () => { audioReady = true; onReady(); });
-  // 慢网或音频请求停滞时仍允许进入，点击后继续尝试播放。
-  setTimeout(() => { if (!audioReady) { audioReady = true; onReady(); } }, MAX_WAIT);
+  primeBgVideo();
+  if (IS_MOBILE_VIEW) {
+    audioReady = true;
+    $('#noteIndicator').classList.add('off');
+    $('#audioToggle').setAttribute('aria-pressed', 'false');
+    $('#audioToggle').setAttribute('aria-label', '背景音乐：已暂停，点击播放');
+  } else {
+    audio.preload = 'auto';
+    audio.src = './src/assets/audio/bgm-low.mp3';
+    audio.load();
+    audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
+    audio.addEventListener('error', () => { audioReady = true; onReady(); });
+    // 慢网或音频请求停滞时仍允许进入，点击后继续尝试播放。
+    setTimeout(() => { if (!audioReady) { audioReady = true; onReady(); } }, MAX_WAIT);
+  }
 
   // 进度条以默认开启的背景音乐为准；视频会在进入网站后再加载。
   // 时间进度仅用于进度条平滑爬升，不触发按钮显现
@@ -177,31 +186,41 @@ function scrollToSection(id) {
    - 本地化原因（跨浏览器兼容）：远程 stream.mux.com 会被 Chrome 端广告拦截类
      扩展按拦截规则静默拦截（Edge 无扩展故正常），且受 DNS/CDN 可达性影响；
      本地相对路径资源不受任何扩展/网络环境影响，各浏览器行为完全一致。
-   - 用户点击进入后才开始加载背景视频；本地文件缺失时自动回退远程 HLS，
-     全部失败时保留深色底色。
+   - 启动页期间预加载背景视频，用户点击进入后立即播放；视频尚未出帧时使用 CSS 动态底景。
    ============================================================ */
-var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
-var __bgVideoScheduled = false;
-var __bgNeedHls = false; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
-// 仅在用户进入网站后启动视频，避免首屏加载阶段的带宽竞争。
+var __bgVideoStarted; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
+var __bgVideoScheduled;
+var __bgVideoPrimed;
+var __bgNeedHls; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
+function primeBgVideo() {
+  if (__bgVideoPrimed) return;
+  const video = $('#bgVideo');
+  if (!video) return;
+  __bgVideoPrimed = true;
+  video.muted = true; video.defaultMuted = true;
+  video.playsInline = true; video.preload = 'auto'; video.loop = true;
+  video.addEventListener('playing', () => video.classList.add('is-playing'));
+  video.addEventListener('error', () => { __bgNeedHls = true; loadHlsWhenNeeded(() => tryStartHls(video)); }, { once: true });
+  video.src = './src/assets/media/bg-loop.mp4';
+  video.load();
+}
+// 在“点击进入”的同一用户手势内播放；部分移动浏览器会拦截延迟到下一轮事件循环的播放请求。
 function scheduleBgVideo() {
   if (__bgVideoScheduled) return;
   __bgVideoScheduled = true;
-  setTimeout(() => { __bgVideoScheduled = false; initBgVideo(); }, 0);
+  initBgVideo();
+  __bgVideoScheduled = false;
 }
 function initBgVideo() {
   if (__bgVideoStarted) return;
   const video = $('#bgVideo');
   if (!video) return;
   __bgVideoStarted = true;
-  // 自动播放加固：muted 同时设置 attribute 与 property（Chrome 自动播放策略
-  // 在 MSE 换源场景下以 property 为准，仅 attribute 可能被判定为非静音而拦截 play()）
-  video.muted = true; video.defaultMuted = true;
-  // 方案 A（首选）：本地 14s 循环背景视频（约 0.72MiB，720p，faststart）
-  video.loop = true;
-  video.src = './src/assets/media/bg-loop.mp4';
-  video.addEventListener('error', () => { __bgNeedHls = true; loadHlsWhenNeeded(() => tryStartHls(video)); }); // 本地缺失 → 按需加载 hls.js 后走远程兜底
-  video.play().catch(() => {});
+  primeBgVideo();
+  const tryPlay = () => video.play().catch(() => {});
+  video.addEventListener('loadeddata', tryPlay, { once: true });
+  video.load();
+  tryPlay();
   // 播放看门狗：视频意外暂停（自动播放被拦、标签页节流后未恢复等）时自动续播，
   // 保证 Splash 的“动画动起来才显示按钮”判定不被卡住（本地循环与 HLS 兜底共用）
   setInterval(() => {
@@ -233,7 +252,7 @@ function tryStartHls(video) {
    BGM：单一低码率版本 + 音乐开关
    ============================================================ */
 const BGM_SRC = './src/assets/audio/bgm-low.mp3';
-let audioOn = true;
+let audioOn = !IS_MOBILE_VIEW;
 
 function networkTier() {
   const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;

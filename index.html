@@ -32,12 +32,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" /></noscript>
-<link rel="stylesheet" href="./css/styles.css" />
+<link rel="stylesheet" href="./css/styles.css?v=20260909.2" />
 </head>
 <body>
 
-<!-- 背景视频（本地 mp4 循环，由脚本设置 src；本地缺失时自动回退远程 HLS 流） -->
-<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="auto"></video>
+<!-- CSS 动态底景：视频尚未出帧时保持画面，不使用静态海报图 -->
+<div class="bg-base" aria-hidden="true"></div>
+<!-- 背景视频（启动页预加载，点击进入后播放；本地缺失时自动回退远程 HLS 流） -->
+<video class="bg-video" id="bgVideo" muted loop playsinline preload="auto"></video>
 <div class="bg-overlay"></div>
 
 <!-- BGM 音频（默认开启，使用低码率版本） -->
@@ -321,6 +323,6 @@
 </div>
 
 <!-- hls.js 改为按需懒加载：仅本地 mp4 播放失败时才加载（见主脚本尾部 loadHlsWhenNeeded） -->
-<script src="./js/main.js" defer></script>
+<script src="./js/main.js?v=20260909.2" defer></script>
 </body>
 </html>
