@@ -86,6 +86,12 @@
   .splash.hidden { opacity: 0; pointer-events: none; }
   .splash h1 { font-family: var(--font-serif); font-size: 72px; letter-spacing: -0.02em; position: relative; z-index: 1; }
   .splash .tag { color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; position: relative; z-index: 1; }
+  .splash .load-status {
+    position: relative; z-index: 1; min-height: 20px; margin-bottom: -20px;
+    color: rgba(255,255,255,0.62); font-size: 12px; letter-spacing: 0.08em;
+    text-align: center; transition: color .25s ease;
+  }
+  .splash.has-error .load-status { color: #fca5a5; }
   .splash .enter {
     position: relative; z-index: 1; margin-top: 16px;
     padding: 12px 32px; border: 1px solid rgba(255,255,255,0.2); border-radius: 999px;
@@ -94,6 +100,7 @@
     transition: all 0.5s;
   }
   .splash .enter.ready { opacity: 1; transform: none; pointer-events: auto; }
+  .splash .enter.retry { opacity: 1; transform: none; pointer-events: auto; border-color: rgba(252,165,165,.5); color: #fecaca; }
   .splash:hover .enter { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
   .load-bar { width: 180px; height: 2px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; position: relative; z-index: 1; }
   .load-bar i { display: block; height: 100%; width: 0; background: #fff; transition: width 0.3s; }

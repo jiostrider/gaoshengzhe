@@ -71,12 +71,13 @@ function scrollToSection(id) {
 })();
 
 /* ============================================================
-   Splash：动态背景与音频加载进度 + 点击进入
+   Splash：全站媒体资源门禁 + 点击进入
+   - 页面中的壁纸、音频、图片、视频全部达到可展示/可连续播放状态后才放行
+   - 不用伪时间进度，也不因超时跳过；失败项留在启动页并允许重试
    ============================================================ */
 (function initSplash() {
   const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
-  const pctEl = $('#loadPct');
-  let lastShown = -1; // 上次展示的百分比，避免每帧重复写 DOM
+  const pctEl = $('#loadPct'), statusEl = $('#loadStatus');
   // Splash（loading）期间锁定滚动：overflow 兜底 + 捕获阶段拦截滚轮/触摸/键盘滚动
   // （捕获阶段执行并 stopImmediatePropagation，避免先注册的 WheelDamp 阻尼模块累积滚动目标导致进入后跳位）
   document.body.style.overflow = 'hidden';
@@ -90,85 +91,140 @@ function scrollToSection(id) {
   window.addEventListener('touchmove', scrollLock, { capture: true, passive: false });
   window.addEventListener('keydown', keyLock, { capture: true });
 
-  // 根据网络情况决定最长加载等待：差网多等（6s），好网少等（3s）
-  const MAX_WAIT = networkTier() === 'poor' ? 6000 : 3000;
-  const start = performance.now();
-  const ENTER_TEXT = '点击进入';    // 按钮就绪文案
-  const LOADING_TEXT = '加载中';    // 按钮加载文案（末尾省略号动态追加）
-  let audioReady = false, entered = false;
-  let dotsTimer = null, dotsCount = 0; // “加载中...” 动态省略号定时器/点数
+  let ready = false, entered = false, loading = false;
+  let failedUrls = [];
 
-  // ① 背景视频仅在访客点击进入后加载，避免启动页预先消耗视频带宽。
-
-  // ② 音乐：桌面端预加载并默认播放；手机端默认关闭，用户点按音符后才加载。
+  // 音频在所有设备都预载；移动端仍保持默认静音，只是不再把下载推迟到进入后。
   const audio = $('#bgm');
   primeBgVideo();
   if (IS_MOBILE_VIEW) {
-    audioReady = true;
     $('#noteIndicator').classList.add('off');
     $('#audioToggle').setAttribute('aria-pressed', 'false');
     $('#audioToggle').setAttribute('aria-label', '背景音乐：已暂停，点击播放');
-  } else {
-    audio.preload = 'auto';
-    audio.src = './src/assets/audio/bgm-low.mp3';
-    audio.load();
-    audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
-    audio.addEventListener('error', () => { audioReady = true; onReady(); });
-    // 慢网或音频请求停滞时仍允许进入，点击后继续尝试播放。
-    setTimeout(() => { if (!audioReady) { audioReady = true; onReady(); } }, MAX_WAIT);
   }
+  audio.src = './src/assets/audio/bgm-low.mp3';
+  audio.preload = 'auto';
+  audio.load();
 
-  // 进度条以默认开启的背景音乐为准；视频会在进入网站后再加载。
-  // 时间进度仅用于进度条平滑爬升，不触发按钮显现
-  (function fill() {
-    const ready = audioReady ? 100 : 0;
-    const tElapsed = Math.min(0.95, (performance.now() - start) / MAX_WAIT);
-    const shown = Math.max(ready, Math.round(tElapsed * 100));
-    bar.style.width = shown + '%';
-    if (shown !== lastShown) { pctEl.textContent = shown + '%'; lastShown = shown; } // 仅在数值变化时写 DOM
-    if (ready >= 100) { // 全部就绪 → 显现“点击进入”，加载器切换到打勾就绪态
-      enter.classList.add('ready');
-      splash.classList.add('ready');
-    }
-    if (!entered) requestAnimationFrame(fill);
-  })();
+  // 等本文件后续的同步初始化完成（轮播、证书墙、隐藏弹层均已生成 DOM）再扫描。
+  setTimeout(loadAllAssets, 0);
 
-  // 音乐准备完成后即可进入；动态背景在进入后才开始加载。
-  function canEnter() { return audioReady; }
-
-  // 仅点击按钮可进入：按钮未就绪（未满 100%）时不可点；就绪后点击，
-  // 若背景仍未加载完成则进入“加载中...”动态提示，完成后由用户再次点击执行进入
   enter.addEventListener('click', () => {
-    if (canEnter()) enterSite();
-    else startDots();
+    if (ready) enterSite();
+    else if (!loading && failedUrls.length) loadAllAssets();
   });
 
-  // “加载中...”动态省略号：每 400ms 依次追加一个点，循环 0 → 1 → 2 → 3 → 0
-  function startDots() {
-    dotsCount = 0;
-    enter.textContent = LOADING_TEXT;
-    clearInterval(dotsTimer);
-    dotsTimer = setInterval(() => {
-      dotsCount = (dotsCount + 1) % 4;
-      enter.textContent = LOADING_TEXT + '...'.slice(0, dotsCount);
-    }, 400);
-  }
-  function stopDots() {
-    clearInterval(dotsTimer);
-    dotsTimer = null;
-    enter.textContent = ENTER_TEXT;
+  function absoluteUrl(src) {
+    try { return new URL(src, document.baseURI).href; } catch (_) { return src; }
   }
 
-  // 不再自动放行：时间进度到 100% 后按钮显现，是否进入由用户点击决定
+  function waitForImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const done = () => {
+        const decoded = img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+        decoded.then(() => resolve(src));
+      };
+      img.onload = done;
+      img.onerror = () => reject(new Error(src));
+      img.src = src;
+      if (img.complete) img.naturalWidth ? done() : reject(new Error(src));
+    });
+  }
 
-  function onReady() {
-    if (canEnter() && !entered) stopDots(); // 背景就绪 → 恢复“点击进入”
+  function waitForMedia(el, src) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        el.removeEventListener('canplaythrough', pass);
+        el.removeEventListener('error', fail);
+        ok ? resolve(src) : reject(new Error(src));
+      };
+      const pass = () => finish(true);
+      const fail = () => finish(false);
+      // 超时只报告失败并留在启动页，不会绕过资源门禁。
+      const timer = setTimeout(fail, networkTier() === 'poor' ? 90000 : 45000);
+      el.addEventListener('canplaythrough', pass, { once: true });
+      el.addEventListener('error', fail, { once: true });
+      el.preload = 'auto';
+      if (el.dataset.src) {
+        el.src = el.dataset.src;
+        el.dataset.loaded = '1';
+      } else if (!el.getAttribute('src')) {
+        el.src = src;
+      }
+      if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) finish(true);
+      else el.load();
+    });
+  }
+
+  async function loadAllAssets() {
+    if (loading || entered) return;
+    loading = true; ready = false; failedUrls = [];
+    splash.classList.remove('ready', 'has-error');
+    enter.classList.remove('ready', 'retry');
+    enter.textContent = '加载中…';
+    bar.style.width = '0%'; pctEl.textContent = '0%';
+
+    document.querySelectorAll('img[src]').forEach((img) => { img.loading = 'eager'; });
+    const imageUrls = new Set();
+    document.querySelectorAll('img[src]').forEach((img) => {
+      const src = img.getAttribute('src').trim();
+      if (src) imageUrls.add(absoluteUrl(src));
+    });
+    document.querySelectorAll('video[poster]').forEach((video) => {
+      const poster = video.getAttribute('poster').trim();
+      if (poster) imageUrls.add(absoluteUrl(poster));
+    });
+
+    const mediaByUrl = new Map();
+    document.querySelectorAll('video[src], video[data-src], audio[src]').forEach((el) => {
+      const raw = el.dataset.src || el.getAttribute('src');
+      if (raw) mediaByUrl.set(absoluteUrl(raw), el);
+    });
+
+    const tasks = [
+      ...[...imageUrls].map((url) => ({ url, run: () => waitForImage(url) })),
+      ...[...mediaByUrl].map(([url, el]) => ({ url, run: () => waitForMedia(el, url) })),
+    ];
+    let finished = 0;
+    const update = () => {
+      const pct = tasks.length ? Math.round((finished / tasks.length) * 100) : 100;
+      bar.style.width = pct + '%'; pctEl.textContent = pct + '%';
+      statusEl.textContent = `正在加载 ${finished} / ${tasks.length} 项资源`;
+    };
+    update();
+    const results = await Promise.allSettled(tasks.map(async (task) => {
+      try { return await task.run(); }
+      finally { finished += 1; update(); }
+    }));
+    failedUrls = results.flatMap((result, i) => result.status === 'rejected' ? [tasks[i].url] : []);
+    loading = false;
+    if (failedUrls.length) {
+      splash.classList.add('has-error');
+      const failedNames = failedUrls.map((url) => {
+        try { return decodeURIComponent(new URL(url).pathname.split('/').pop()); }
+        catch (_) { return url; }
+      }).join('、');
+      statusEl.textContent = `${failedUrls.length} 项资源加载失败：${failedNames}，请重试`;
+      enter.textContent = '重试加载';
+      enter.classList.add('retry');
+      console.error('启动资源加载失败：', failedUrls);
+      return;
+    }
+    ready = true;
+    statusEl.textContent = `全部 ${tasks.length} 项资源已就绪`;
+    enter.textContent = '点击进入';
+    enter.classList.add('ready');
+    splash.classList.add('ready');
   }
 
   function enterSite() {
     if (entered) return;
     entered = true;
-    stopDots();
     // 解除 loading 期间的滚动锁定
     window.removeEventListener('wheel', scrollLock, { capture: true });
     window.removeEventListener('touchmove', scrollLock, { capture: true });
@@ -1174,11 +1230,15 @@ document.addEventListener('keydown', (e) => {
     overlay.classList.add('open');
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';   // 锁定背景滚动（触摸/滚动条/键盘）
+    // 视频已在启动页完成缓冲；弹层由用户手势打开时立即播放，避免浏览器未及时
+    // 重新触发 IntersectionObserver 而停在海报帧。
+    modal.querySelectorAll('video[data-loaded="1"]').forEach((video) => video.play().catch(() => {}));
   };
   const close = () => {
     overlay.classList.remove('open');
     modal.classList.remove('open');
     document.body.style.overflow = '';
+    modal.querySelectorAll('video').forEach((video) => video.pause());
   };
   entry.addEventListener('click', open);
   entry.addEventListener('keydown', (e) => {
