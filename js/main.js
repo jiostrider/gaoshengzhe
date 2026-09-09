@@ -70,7 +70,7 @@ function scrollToSection(id) {
 })();
 
 /* ============================================================
-   Splash：图片预加载进度 + 点击进入
+   Splash：动态背景与音频加载进度 + 点击进入
    ============================================================ */
 (function initSplash() {
   const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
@@ -94,34 +94,22 @@ function scrollToSection(id) {
   const start = performance.now();
   const ENTER_TEXT = '点击进入';    // 按钮就绪文案
   const LOADING_TEXT = '加载中';    // 按钮加载文案（末尾省略号动态追加）
-  let posterReady = false, posterFailed = false;
   let videoReady = false, audioReady = false, entered = false;
   let dotsTimer = null, dotsCount = 0; // “加载中...” 动态省略号定时器/点数
 
-  // ① 背景海报帧（本地压缩 WebP，约 37KB）：显式预加载，并精确检测“完全加载显现”
-  const poster = new Image();
-  const markPosterReady = () => { if (!posterReady) { posterReady = true; onReady(); } };
-  poster.onload = markPosterReady;                            // 加载成功 → 背景已完全加载
-  poster.onerror = () => { posterFailed = true; onReady(); }; // 失败 → 渐变底兜底，仍可进入
-  poster.src = './src/assets/images/bg-poster.webp';
-  if (poster.complete && poster.naturalWidth > 0) markPosterReady(); // 命中浏览器缓存时同步判定
-
-  // ② 背景视频（远程 HLS）：后台加载；以真实开播（动画动起来）为就绪标准，
-  //    加载失败也放行（渐变底/海报静态兜底），避免按钮永不显现
+  // ① 背景视频：以真实开播（动画动起来）为就绪标准；加载失败也放行，避免启动页卡住。
   const bgVideo = $('#bgVideo');
   bgVideo.addEventListener('playing', () => {
-    $('#bgPoster').style.opacity = '0';
     if (!videoReady) { videoReady = true; onReady(); } // 动画真正开始播放 → 就绪
   });
   bgVideo.addEventListener('error', () => { videoReady = true; onReady(); });
-  scheduleBgVideo(); // 差网延迟 4s 再起播，优先保证海报帧 + 音乐
+  scheduleBgVideo();
 
   // 跨浏览器兜底：若 hls.js 全部来源加载失败（CDN 不可达等）或视频长时间未开播，
-  // 超时后放行 video 的 20% 进度，避免 Splash 卡在 80%、按钮永不显现；
-  // 视频之后若恢复播放，'playing' 监听仍会将海报淡出并切换为动态背景
+  // 超时后放行视频进度，避免启动页一直等待网络。
   setTimeout(() => { if (!videoReady) { videoReady = true; onReady(); } }, 8000);
 
-  // ③ 音乐（BGM）：本地双码率，Splash 期间即预加载，进入时点击手势下立即出声
+  // ② 音乐（BGM）：Splash 期间预加载，进入时点击手势下立即出声
   const audio = $('#bgm');
   audio.preload = 'auto';
   audio.src = networkTier() === 'good' ? './src/assets/audio/bgm.mp3' : './src/assets/audio/bgm-low.mp3';
@@ -129,10 +117,10 @@ function scrollToSection(id) {
   audio.addEventListener('canplay', () => { audioReady = true; onReady(); });
   audio.addEventListener('error', () => { audioReady = true; onReady(); });
 
-  // 进度条：海报帧 60% + 音频 20% + 视频开播 20%；全部就绪（背景动画已动起来）才显现按钮，
+  // 进度条：视频 70% + 音频 30%；全部就绪才显现按钮，
   // 时间进度仅用于进度条平滑爬升，不触发按钮显现
   (function fill() {
-    const ready = (posterReady || posterFailed ? 60 : 0) + (audioReady ? 20 : 0) + (videoReady ? 20 : 0);
+    const ready = (videoReady ? 70 : 0) + (audioReady ? 30 : 0);
     const tElapsed = Math.min(ready / 100, (performance.now() - start) / MAX_WAIT);
     const shown = Math.max(ready, Math.round(tElapsed * 100));
     bar.style.width = shown + '%';
@@ -144,8 +132,8 @@ function scrollToSection(id) {
     if (!entered) requestAnimationFrame(fill);
   })();
 
-  // 背景图片“已完全加载显现”方可进入（加载失败则以渐变底兜底）
-  function canEnter() { return posterReady || posterFailed; }
+  // 动态背景已就绪（或超时放行）后即可进入。
+  function canEnter() { return videoReady; }
 
   // 仅点击按钮可进入：按钮未就绪（未满 100%）时不可点；就绪后点击，
   // 若背景仍未加载完成则进入“加载中...”动态提示，完成后由用户再次点击执行进入
@@ -197,13 +185,13 @@ function scrollToSection(id) {
    - 本地化原因（跨浏览器兼容）：远程 stream.mux.com 会被 Chrome 端广告拦截类
      扩展按拦截规则静默拦截（Edge 无扩展故正常），且受 DNS/CDN 可达性影响；
      本地相对路径资源不受任何扩展/网络环境影响，各浏览器行为完全一致。
-   - 壁纸保障：Splash 展示期间即开始缓冲/播放（muted 可自动播放），
-     用户进入时壁纸已就绪；本地文件缺失时自动回退远程 HLS，仍失败保持海报（不黑屏）。
+   - Splash 展示期间即开始缓冲/播放（muted 可自动播放），用户进入时动态背景已就绪；
+     本地文件缺失时自动回退远程 HLS，全部失败时保留深色底色。
    ============================================================ */
 var __bgVideoStarted = false; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
 var __bgVideoScheduled = false;
 var __bgNeedHls = false; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
-// 差网延迟 4s 再起播视频：优先保证海报帧 + 音乐这两个本地资源，避免带宽竞争
+// 差网延迟 4s 再起播视频，避免与音乐资源同时争抢带宽。
 function scheduleBgVideo() {
   if (__bgVideoScheduled) return;
   __bgVideoScheduled = true;
@@ -297,6 +285,27 @@ $('#audioToggle').addEventListener('click', () => {
   bar.addEventListener('mouseleave', () => glow.style.opacity = 0);
   const buttons = [...$$('#navLinks button')];
   buttons.forEach((b) => b.addEventListener('click', () => scrollToSection(b.dataset.target)));
+  const menuToggle = $('#menuToggle');
+  const mobileMenu = $('#mobileMenu');
+  const closeMobileMenu = () => {
+    mobileMenu.classList.remove('open');
+    mobileMenu.setAttribute('aria-hidden', 'true');
+    menuToggle.setAttribute('aria-expanded', 'false');
+    menuToggle.setAttribute('aria-label', '打开导航菜单');
+  };
+  menuToggle.addEventListener('click', () => {
+    const open = !mobileMenu.classList.contains('open');
+    mobileMenu.classList.toggle('open', open);
+    mobileMenu.setAttribute('aria-hidden', String(!open));
+    menuToggle.setAttribute('aria-expanded', String(open));
+    menuToggle.setAttribute('aria-label', open ? '关闭导航菜单' : '打开导航菜单');
+  });
+  $$('#mobileMenu button[data-target]').forEach((b) => b.addEventListener('click', () => {
+    scrollToSection(b.dataset.target);
+    closeMobileMenu();
+  }));
+  mobileMenu.addEventListener('click', (e) => { if (e.target === mobileMenu) closeMobileMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobileMenu(); });
   // 滚动高亮 + 标签累积浮现：进入过的板块标签从左到右依次永久显示
   const ids = ['skills', 'projects', 'education', 'certificates', 'unique', 'contact'];
   const revealed = new Set();   // 已进入过的板块

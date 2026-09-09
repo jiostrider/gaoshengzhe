@@ -32,16 +32,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@300;400;500;600&display=swap" /></noscript>
-<!-- 背景海报帧（本地压缩 WebP）：页面加载即开始下载，点击进入时已缓存 → 秒开 -->
-<link rel="preload" as="image" href="./src/assets/images/bg-poster.webp" />
 <link rel="stylesheet" href="./css/styles.css" />
 </head>
 <body>
 
-<!-- 背景壁纸（本地 WebP 海报帧：压缩小、秒开；离线/差网时保证 1s 内出图） -->
-<div class="bg-poster" id="bgPoster"></div>
 <!-- 背景视频（本地 mp4 循环，由脚本设置 src；本地缺失时自动回退远程 HLS 流） -->
-<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="auto" poster="./src/assets/images/bg-poster.webp"></video>
+<video class="bg-video" id="bgVideo" muted autoplay loop playsinline preload="auto"></video>
 <div class="bg-overlay"></div>
 
 <!-- BGM 音频（双码率自适应） -->
@@ -88,6 +84,9 @@
       </div>
     </div>
     <div class="nav-right">
+      <button class="nav-btn menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="mobileMenu" aria-label="打开导航菜单">
+        <span></span><span></span><span></span>
+      </button>
       <button class="nav-btn" id="audioToggle" title="背景音效" aria-pressed="true" aria-label="背景音乐：播放中">
         <span class="note-indicator on" id="noteIndicator">
           <svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -104,6 +103,19 @@
     </div>
   </div>
 </nav>
+
+<!-- 移动端导航：小屏幕下替代被收起的顶部链接 -->
+<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+  <div class="mobile-menu-panel liquid-glass">
+    <p class="mobile-menu-label">NAVIGATION</p>
+    <button data-target="skills">技术栈</button>
+    <button data-target="projects">AI 实战作品</button>
+    <button data-target="education">求学之路</button>
+    <button data-target="certificates">荣誉认证</button>
+    <button data-target="unique">独特之处</button>
+    <button data-target="contact">联系方式</button>
+  </div>
+</div>
 
 <main>
   <!-- ==================== Hero ==================== -->
