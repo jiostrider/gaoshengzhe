@@ -459,6 +459,9 @@
   }
   .poker-hint .ico { color: #a5b4fc; }
   @media (max-width: 560px) {
+    /* 牌堆原本受 200px 最小卡宽限制，舞台会被撑到 440px，导致整页横向滚动。
+       这里以区块可用宽度（视口减去左右 24px 内边距）反推卡宽，牌堆始终留在视口内。 */
+    .poker-stage, .poker-meta { --cw: calc((100vw - 48px) / 2.2); }
     .poker-meta { flex-direction: column; gap: 6px; text-align: center; }
     .poker-meta .poker-link { margin-left: 0; }
   }
