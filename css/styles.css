@@ -714,11 +714,11 @@
     .footer-links {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       align-items: center;
       justify-items: center;
-      gap: 16px 10px;
-      font-size: 16px;
+      gap: 18px 6px;
+      font-size: 15px;
     }
     .footer-links a { min-width: 0; white-space: nowrap; }
     .footer-links a:first-child { grid-column: 1 / -1; }
