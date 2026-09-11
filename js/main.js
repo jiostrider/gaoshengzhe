@@ -1286,20 +1286,97 @@ document.addEventListener('keydown', (e) => {
         </div>`).join('')}
     </div>`;
 
-  // 懒加载 + 视口内自动播放
+  // 视频提前加载与实际播放分开观察：提前 300px 准备资源，真正进入视口后才播放。
+  // 避免浏览器在离屏/省电状态自动挂起视频后，滚到卡片处却不再触发恢复。
   const videos = $$('.uf-card video');
-  const vio = new IntersectionObserver((entries) => {
-    entries.forEach((en) => {
-      const v = en.target;
-      if (en.isIntersecting) {
-        if (!v.dataset.loaded) { v.src = v.dataset.src; v.load(); v.dataset.loaded = '1'; }
-        v.play().catch(() => {});
-      } else if (v.dataset.loaded) {
-        v.pause();
+  const visibleVideos = new Set();
+  const retryTimers = new WeakMap();
+  const ensureLoaded = (video) => {
+    if (video.dataset.loaded || !video.dataset.src) return;
+    video.src = video.dataset.src;
+    video.preload = 'auto';
+    video.dataset.loaded = '1';
+    video.load();
+  };
+  const scheduleRetry = (video, delay = 500) => {
+    clearTimeout(retryTimers.get(video));
+    retryTimers.set(video, setTimeout(() => {
+      if (visibleVideos.has(video) && !document.hidden) playVideo(video);
+    }, delay));
+  };
+  const playVideo = (video) => {
+    ensureLoaded(video);
+    if (document.hidden || !visibleVideos.has(video)) return;
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      if (!video.dataset.playWait) {
+        video.dataset.playWait = '1';
+        video.addEventListener('loadeddata', () => {
+          delete video.dataset.playWait;
+          playVideo(video);
+        }, { once: true });
       }
+      return;
+    }
+    const promise = video.play();
+    if (promise) promise.catch(() => scheduleRetry(video));
+  };
+
+  const preloadObserver = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) ensureLoaded(en.target);
     });
   }, { rootMargin: '300px 0px' });
-  videos.forEach((v) => vio.observe(v));
+  const playObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const video = entry.target;
+      if (entry.isIntersecting) {
+        visibleVideos.add(video);
+        playVideo(video);
+      } else {
+        visibleVideos.delete(video);
+        clearTimeout(retryTimers.get(video));
+        if (video.dataset.loaded) video.pause();
+      }
+    });
+  }, { threshold: 0.05 });
+
+  videos.forEach((video) => {
+    preloadObserver.observe(video);
+    playObserver.observe(video);
+    ['canplay', 'loadeddata'].forEach((event) => video.addEventListener(event, () => {
+      if (visibleVideos.has(video)) playVideo(video);
+    }));
+    ['waiting', 'stalled'].forEach((event) => video.addEventListener(event, () => {
+      if (visibleVideos.has(video)) scheduleRetry(video, 800);
+    }));
+    video.addEventListener('error', () => {
+      if (!visibleVideos.has(video) || video.dataset.recovered) return;
+      video.dataset.recovered = '1';
+      setTimeout(() => {
+        video.src = video.dataset.src;
+        video.load();
+        playVideo(video);
+      }, 1000);
+    });
+  });
+
+  const resumeVisible = () => {
+    if (!document.hidden) visibleVideos.forEach(playVideo);
+  };
+  document.addEventListener('visibilitychange', resumeVisible);
+  window.addEventListener('pageshow', resumeVisible);
+  window.addEventListener('focus', resumeVisible);
+  setInterval(resumeVisible, 2000);
+
+  // 供兴趣弹层在打开/关闭的用户手势中复用同一套可靠播放状态机。
+  window.ContentVideoPlayback = {
+    play(video) { visibleVideos.add(video); playVideo(video); },
+    pause(video) {
+      visibleVideos.delete(video);
+      clearTimeout(retryTimers.get(video));
+      video.pause();
+    },
+  };
 })();
 
 /* ============================================================
@@ -1308,24 +1385,69 @@ document.addEventListener('keydown', (e) => {
    - 图片接近视口 500px 时才设置真实 src
    ============================================================ */
 (function initLazyImages() {
-  const images = document.querySelectorAll('img[data-src]');
   const load = (img) => {
     if (img.dataset.loaded) return;
     img.src = img.dataset.src;
     img.dataset.loaded = '1';
+    img.addEventListener('error', () => {
+      if (img.dataset.retried) return;
+      img.dataset.retried = '1';
+      setTimeout(() => {
+        img.removeAttribute('src');
+        requestAnimationFrame(() => { img.src = img.dataset.src; });
+      }, 1200);
+    }, { once: true });
   };
   if (!('IntersectionObserver' in window)) {
-    images.forEach(load);
+    document.querySelectorAll('img[data-src]').forEach(load);
     return;
   }
-  const observer = new IntersectionObserver((entries) => {
+
+  const imageObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
       load(entry.target);
-      observer.unobserve(entry.target);
+      imageObserver.unobserve(entry.target);
     });
   }, { rootMargin: '500px 0px' });
-  images.forEach((img) => observer.observe(img));
+
+  const certSection = document.getElementById('certificates');
+  const loadCertificateImages = () => {
+    if (!certSection) return;
+    certSection.dataset.imagesReady = '1';
+    certSection.querySelectorAll('img[data-src]').forEach((img) => {
+      imageObserver.unobserve(img);
+      load(img);
+    });
+  };
+  const certObserver = certSection ? new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    loadCertificateImages();
+    certObserver.disconnect();
+  }, { rootMargin: '800px 0px' }) : null;
+  if (certObserver) certObserver.observe(certSection);
+
+  const register = (img) => {
+    if (!(img instanceof HTMLImageElement) || !img.dataset.src || img.dataset.loaded) return;
+    // 证书墙可能因手机地址栏/横竖屏变化被整体重建。区域已经触发过时，
+    // 新节点直接沿用已缓存的证书资源；未触发时等待整个区域进入附近。
+    if (certSection?.contains(img)) {
+      if (certSection.dataset.imagesReady) load(img);
+      return;
+    }
+    imageObserver.observe(img);
+  };
+  document.querySelectorAll('img[data-src]').forEach(register);
+
+  // 接管证书墙 resize 后重建的图片，以及未来按交互动态插入的懒加载图片。
+  const mutationObserver = new MutationObserver((records) => {
+    records.forEach((record) => record.addedNodes.forEach((node) => {
+      if (!(node instanceof Element)) return;
+      if (node.matches('img[data-src]')) register(node);
+      node.querySelectorAll?.('img[data-src]').forEach(register);
+    }));
+  });
+  mutationObserver.observe(document.body, { childList: true, subtree: true });
 })();
 
 /* ============================================================
@@ -1340,21 +1462,13 @@ document.addEventListener('keydown', (e) => {
     document.body.style.overflow = 'hidden';   // 锁定背景滚动（触摸/滚动条/键盘）
     // 兴趣视频到此刻才设置真实地址。
     // 直接在用户手势内启动播放，避免隐藏弹层未及时触发 IntersectionObserver。
-    modal.querySelectorAll('video').forEach((video) => {
-      if (!video.dataset.loaded && video.dataset.src) {
-        video.src = video.dataset.src;
-        video.preload = 'auto';
-        video.dataset.loaded = '1';
-        video.load();
-      }
-      video.play().catch(() => {});
-    });
+    modal.querySelectorAll('video').forEach((video) => window.ContentVideoPlayback?.play(video));
   };
   const close = () => {
     overlay.classList.remove('open');
     modal.classList.remove('open');
     document.body.style.overflow = '';
-    modal.querySelectorAll('video').forEach((video) => video.pause());
+    modal.querySelectorAll('video').forEach((video) => window.ContentVideoPlayback?.pause(video));
   };
   entry.addEventListener('click', open);
   entry.addEventListener('keydown', (e) => {
