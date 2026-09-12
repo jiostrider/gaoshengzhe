@@ -31,7 +31,7 @@
 - 移动端导航与响应式布局
 - 动态背景视频与默认开启的背景音乐
 - AI 实战项目扑克牌轮播
-- 演示文稿轮播与全屏查看
+- 演示文稿画册翻页（点击左 / 右半页、方向键或触屏轻扫翻页，纸边与书脊质感，悬停显示全屏入口，减少动态效果适配）
 - 可拖拽的荣誉证书墙
 - 联系资料、二维码与 PDF 简历下载
 - 本地规则型作品集导览助手
@@ -43,11 +43,19 @@
 样式与脚本使用版本参数避免浏览器缓存旧文件：
 
 ```html
-<link rel="stylesheet" href="./css/styles.css?v=20260911.1" />
-<script src="./js/main.js?v=20260911.1" defer></script>
+<link rel="stylesheet" href="./css/styles.css?v=20260912.4" />
+<script src="./js/main.js?v=20260912.4" defer></script>
 ```
 
 修改 CSS 或 JavaScript 并部署时，请同步更新这两个 `v=` 版本号。
+
+## 近期迭代要点
+
+- **导航**：桌面端默认显示全部 6 项，滚动时仍有高亮指示条
+- **中文字体**：标题增加 Source Han Serif SC / Noto Serif CJK SC / STSong / SimSun 回退链，确保衬线质感跨平台一致
+- **滚动性能**：滚动期间给 `body` 挂 `.is-scrolling`，临时关闭液态玻璃实时模糊与求学轨迹 SVG 辉光，静止 160ms 后自动复原 —— 静止视觉不变，仅运动瞬间去重特效换取流畅
+- **启动页 / BGM**：支持跳过启动动画与 BGM 开关，偏好持久化到 `localStorage`（`bgm-enabled` / `splash-skip`）
+- **兼容性**：`localStorage` 访问加 `try/catch` 包裹，规避 `file://` 协议下的 SecurityError
 
 ## 关于真实 AI 接入
 

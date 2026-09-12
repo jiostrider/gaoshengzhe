@@ -1,9 +1,24 @@
+/* JS 已加载：移除 no-js 标记，启用渐进增强样式（reveal 入场隐藏等）；
+   脚本加载失败时保持 no-js，静态内容始终可读 */
+document.documentElement.classList.remove('no-js');
+document.documentElement.classList.add('js');
+
 /* ============================================================
    工具函数
    ============================================================ */
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const IS_MOBILE_VIEW = window.matchMedia('(max-width: 768px)').matches;
+// 安全 storage：file:// 协议或隐私模式下 localStorage 可能被禁用，直接访问会抛异常中断脚本
+const store = {
+  get(key) { try { return localStorage.getItem(key); } catch (_) { return null; } },
+  set(key, val) { try { localStorage.setItem(key, val); } catch (_) {} },
+};
+
+/* BGM 偏好（提前声明：initSplash 中会读取 audioOn 同步音符按钮初始状态） */
+const BGM_PREF_KEY = 'bgm-enabled';
+// 仅在用户曾经主动开启过时恢复播放；任何情况下默认关闭（含首次访问与隐私模式）
+let audioOn = store.get(BGM_PREF_KEY) === '1';
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -50,6 +65,8 @@ function scrollToSection(id) {
   }
 
   window.addEventListener('wheel', (e) => {
+    // Ctrl+滚轮（触控板捏合缩放）交还浏览器原生缩放，不劫持
+    if (e.ctrlKey || e.metaKey) return;
     // 二维码灯箱打开时锁定滚轮，不让页面阻尼滑动
     if (document.getElementById('qrLightbox')?.style.display === 'flex') return;
     if (insideScrollable(e.target)) return;
@@ -79,6 +96,16 @@ function scrollToSection(id) {
 (function initSplash() {
   const splash = $('#splash'), bar = $('#loadBar'), enter = splash.querySelector('.enter');
   const pctEl = $('#loadPct'), statusEl = $('#loadStatus');
+  const SKIP_KEY = 'splash-skip';
+  // 记住选择：用户上次已进入过站点 → 跳过 Splash，直接进主页
+  if (store.get(SKIP_KEY) === '1') {
+    splash.remove();
+    document.body.classList.add('site-entered');
+    document.dispatchEvent(new CustomEvent('site-entered'));
+    window.__entered = true;
+    scheduleBgVideo();
+    return;
+  }
   // Splash（loading）期间锁定滚动：overflow 兜底 + 捕获阶段拦截滚轮/触摸/键盘滚动
   // （捕获阶段执行并 stopImmediatePropagation，避免先注册的 WheelDamp 阻尼模块累积滚动目标导致进入后跳位）
   document.body.style.overflow = 'hidden';
@@ -95,13 +122,13 @@ function scrollToSection(id) {
   let ready = false, entered = false, loading = false;
   let failedUrls = [];
 
-  // 音频不参与启动预载：桌面端点击进入时按默认开启策略加载播放，
-  // 移动端保持默认静音，等用户主动开启时才请求。
+  // 音频不参与启动预载：默认关闭，仅用户曾主动开启时才在进入站点后加载播放。
   const audio = $('#bgm');
   primeBgVideo();
   audio.preload = 'none';
   audio.removeAttribute('src');
-  if (IS_MOBILE_VIEW) {
+  // 初始状态与 audioOn 保持一致（默认关闭）
+  if (!audioOn) {
     $('#noteIndicator').classList.add('off');
     $('#audioToggle').setAttribute('aria-pressed', 'false');
     $('#audioToggle').setAttribute('aria-label', '背景音乐：已暂停，点击播放');
@@ -114,6 +141,9 @@ function scrollToSection(id) {
     if (ready) enterSite();
     else if (!loading && failedUrls.length) loadAllAssets();
   });
+  // 失败逃生口：用户可选择放弃等待失败资源，直接进入站点（未加载项后续照常懒加载）
+  const forceEnter = $('#forceEnter');
+  if (forceEnter) forceEnter.addEventListener('click', () => enterSite());
 
   function absoluteUrl(src) {
     try { return new URL(src, document.baseURI).href; } catch (_) { return src; }
@@ -168,6 +198,7 @@ function scrollToSection(id) {
     splash.classList.remove('ready', 'has-error');
     enter.classList.remove('ready', 'retry');
     enter.textContent = '加载中…';
+    if (forceEnter) forceEnter.hidden = true;
     bar.style.width = '0%'; pctEl.textContent = '0%';
 
     const imageUrls = new Set();
@@ -207,9 +238,10 @@ function scrollToSection(id) {
         try { return decodeURIComponent(new URL(url).pathname.split('/').pop()); }
         catch (_) { return url; }
       }).join('、');
-      statusEl.textContent = `${failedUrls.length} 项资源加载失败：${failedNames}，请重试`;
+      statusEl.textContent = `${failedUrls.length} 项资源加载失败：${failedNames}，可重试或点击下方“仍然进入”`;
       enter.textContent = '重试加载';
       enter.classList.add('retry');
+      if (forceEnter) forceEnter.hidden = false;
       console.error('启动资源加载失败：', failedUrls);
       return;
     }
@@ -223,38 +255,43 @@ function scrollToSection(id) {
   function enterSite() {
     if (entered) return;
     entered = true;
+    store.set(SKIP_KEY, '1'); // 记住已访问，下次跳过 Splash
     // 解除 loading 期间的滚动锁定
     window.removeEventListener('wheel', scrollLock, { capture: true });
     window.removeEventListener('touchmove', scrollLock, { capture: true });
     window.removeEventListener('keydown', keyLock, { capture: true });
     document.body.style.overflow = '';
     splash.classList.add('hidden');
+    document.body.classList.add('site-entered');
+    document.dispatchEvent(new CustomEvent('site-entered'));
     window.__entered = true;
     scheduleBgVideo();
-    bgmPlay(); // 音频已预加载，点击手势下立即出声
+    bgmPlay(); // 仅当用户曾主动开启音乐时才会实际播放
   }
 })();
 
 /* ============================================================
-   背景视频：本地 mp4 循环（首选） + 远程 MUX HLS 流（兜底，hls.js / Safari 原生）
+   背景视频：本地 mp4 循环
    - 本地化原因（跨浏览器兼容）：远程 stream.mux.com 会被 Chrome 端广告拦截类
      扩展按拦截规则静默拦截（Edge 无扩展故正常），且受 DNS/CDN 可达性影响；
      本地相对路径资源不受任何扩展/网络环境影响，各浏览器行为完全一致。
+   - 弱网/省流量模式自动跳过视频，仅保留 CSS 渐变底景（.bg-base）。
    - 启动页期间预加载背景视频，用户点击进入后立即播放；视频尚未出帧时使用 CSS 动态底景。
    ============================================================ */
 var __bgVideoStarted; // var 而非 let：initSplash 同步调用本函数时避免 TDZ
 var __bgVideoScheduled;
 var __bgVideoPrimed;
-var __bgNeedHls; // 本地视频缺失时置位，等待 hls.js 就绪后走远程兜底
 function primeBgVideo() {
   if (__bgVideoPrimed) return;
   const video = $('#bgVideo');
   if (!video) return;
   __bgVideoPrimed = true;
+  // 弱网/省流量模式：不加载全屏背景视频（约 0.72MiB），渐变底景即可
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if ((conn && conn.saveData) || networkTier() === 'poor') return;
   video.muted = true; video.defaultMuted = true;
   video.playsInline = true; video.preload = 'auto'; video.loop = true;
   video.addEventListener('playing', () => video.classList.add('is-playing'));
-  video.addEventListener('error', () => { __bgNeedHls = true; loadHlsWhenNeeded(() => tryStartHls(video)); }, { once: true });
   video.src = './src/assets/media/bg-loop.mp4';
   video.load();
 }
@@ -275,38 +312,18 @@ function initBgVideo() {
   video.addEventListener('loadeddata', tryPlay, { once: true });
   video.load();
   tryPlay();
-  // 播放看门狗：视频意外暂停（自动播放被拦、标签页节流后未恢复等）时自动续播，
-  // 保证 Splash 的“动画动起来才显示按钮”判定不被卡住（本地循环与 HLS 兜底共用）
+  // 播放看门狗：视频意外暂停（自动播放被拦、标签页节流后未恢复等）时自动续播
   setInterval(() => {
     if (document.hidden) return;
     if (video.readyState >= 3 && video.paused) video.play().catch(() => {});
   }, 2000);
 }
-// 方案 B（兜底）：远程 MUX HLS 流，仅当本地视频文件缺失时启用
-function tryStartHls(video) {
-  if (!__bgNeedHls || !window.Hls || !Hls.isSupported()) return;
-  __bgNeedHls = false;
-  const src = "https://stream.mux.com/kimF2ha9zLrX64H00UgLGPflCzNtl1T0215MlAmeOztv8.m3u8";
-  const hls = new Hls({ enableWorker: true });
-  hls.loadSource(src);
-  hls.attachMedia(video);
-  hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-  // 错误明细记录（含非致命）：供 ?bgdebug=1 调试面板展示，定位失败原因
-  hls.on(Hls.Events.ERROR, (_, data) => {
-    (window.__hlsErrLog = window.__hlsErrLog || []).push({
-      type: data.type, details: data.details, fatal: data.fatal,
-      code: data.response && data.response.code,
-    });
-    // 致命错误时向 video 派发 error，让 Splash 的加载完成判定放行（避免按钮永不显现）
-    if (data.fatal) video.dispatchEvent(new Event('error'));
-  });
-}
 
 /* ============================================================
    BGM：单一低码率版本 + 音乐开关
+   - 默认关闭；用户主动开启后用 localStorage 记住选择，下次访问自动恢复
    ============================================================ */
 const BGM_SRC = './src/assets/audio/bgm-low.mp3';
-let audioOn = !IS_MOBILE_VIEW;
 
 function networkTier() {
   const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -332,6 +349,7 @@ $('#audioToggle').addEventListener('click', () => {
   btn.setAttribute('aria-label', audioOn ? '背景音乐：播放中' : '背景音乐：已暂停，点击播放');
   if (audioOn) bgmPlay(); // 沿用已加载的音源和播放位置，避免重新下载。
   else audio.pause();
+  store.set(BGM_PREF_KEY, audioOn ? '1' : '0'); // 记住用户选择
 });
 
 /* ============================================================
@@ -346,7 +364,26 @@ $('#audioToggle').addEventListener('click', () => {
     glow.style.opacity = 1;
   });
   bar.addEventListener('mouseleave', () => glow.style.opacity = 0);
+  const navLinks = $('#navLinks');
+  const indicator = document.createElement('i');
+  indicator.className = 'nav-active-indicator';
+  indicator.setAttribute('aria-hidden', 'true');
+  navLinks.prepend(indicator);
   const buttons = [...$$('#navLinks button')];
+  const syncIndicator = (target) => {
+    const button = buttons.find((item) => item.dataset.target === target);
+    if (!button || innerWidth <= 768) {
+      indicator.classList.remove('visible');
+      return;
+    }
+    requestAnimationFrame(() => {
+      const linksRect = navLinks.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      indicator.style.setProperty('--nav-indicator-x', `${buttonRect.left - linksRect.left - 12}px`);
+      indicator.style.setProperty('--nav-indicator-w', `${buttonRect.width + 24}px`);
+      indicator.classList.add('visible');
+    });
+  };
   buttons.forEach((b) => b.addEventListener('click', () => scrollToSection(b.dataset.target)));
   const menuToggle = $('#menuToggle');
   const mobileMenu = $('#mobileMenu');
@@ -369,20 +406,13 @@ $('#audioToggle').addEventListener('click', () => {
   }));
   mobileMenu.addEventListener('click', (e) => { if (e.target === mobileMenu) closeMobileMenu(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobileMenu(); });
-  // 滚动高亮 + 标签累积浮现：进入过的板块标签从左到右依次永久显示
+  // 滚动高亮：进入的板块对应导航标签点亮
   const ids = ['skills', 'projects', 'education', 'certificates', 'unique', 'contact'];
-  const revealed = new Set();   // 已进入过的板块
-  const reveal = (target) => {
-    const b = buttons.find((x) => x.dataset.target === target);
-    if (!b || revealed.has(target)) return;
-    revealed.add(target);
-    b.classList.add('seen');    // .seen 永久显示（浮现动画仅首次添加时播放一次）
-  };
   const io = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
       if (!en.isIntersecting) return;
       buttons.forEach((b) => b.classList.toggle('active', b.dataset.target === en.target.id));
-      reveal(en.target.id);
+      syncIndicator(en.target.id);
     });
   }, { rootMargin: '-80px 0px -60% 0px' });
   ids.forEach((id) => { const el = document.getElementById(id); if (el) io.observe(el); });
@@ -395,6 +425,7 @@ $('#audioToggle').addEventListener('click', () => {
         if (!en.isIntersecting) return;
         buttons.forEach((b) => b.classList.toggle('active', b.dataset.target === 'contact'));
         reveal('contact');
+        syncIndicator('contact');
       });
     });
     contactIo.observe(contactEl);
@@ -404,6 +435,23 @@ $('#audioToggle').addEventListener('click', () => {
     const el = document.getElementById(id);
     if (el && el.getBoundingClientRect().top <= 80) reveal(id);
   });
+  window.addEventListener('resize', () => {
+    const active = buttons.find((button) => button.classList.contains('active'));
+    if (active) syncIndicator(active.dataset.target);
+  }, { passive: true });
+})();
+
+/* ============================================================
+   滚动性能降级：滚动中给 body 挂 .is-scrolling，静止 160ms 后移除
+   （配合 CSS 临时关闭 backdrop-filter / SVG 辉光，避免逐帧重采样）
+   ============================================================ */
+(function initScrollPerf() {
+  let timer = 0;
+  window.addEventListener('scroll', () => {
+    document.body.classList.add('is-scrolling');
+    clearTimeout(timer);
+    timer = setTimeout(() => document.body.classList.remove('is-scrolling'), 160);
+  }, { passive: true });
 })();
 
 /* ============================================================
@@ -498,10 +546,17 @@ $('#audioToggle').addEventListener('click', () => {
   const track = $('#rotatingTrack');
   const rows = track.children;
   let idx = 0;
-  setInterval(() => {
-    idx = (idx + 1) % rows.length;
-    track.style.transform = `translateY(${-idx * rows[0].offsetHeight}px)`;
-  }, 2000);
+  let mottoTimer = null;
+  const startMotto = () => {
+    if (mottoTimer || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    track.style.transform = 'translateY(0)';
+    mottoTimer = setInterval(() => {
+      idx = (idx + 1) % rows.length;
+      track.style.transform = `translateY(${-idx * rows[0].offsetHeight}px)`;
+    }, 2000);
+  };
+  if (document.body.classList.contains('site-entered')) startMotto();
+  else document.addEventListener('site-entered', startMotto, { once: true });
 
   // 联系资料卡片
   const card = $('#contactCard'), btn = $('#contactBtn');
@@ -826,36 +881,87 @@ document.addEventListener('keydown', (e) => {
     c.style.transform = transforms[i];
   });
   const numEl = $('#pokerNum'), titleEl = $('#pokerTitle'), linkEl = $('#pokerLink');
+  const meta = numEl.closest('.poker-meta');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const syncMeta = () => {
     const top = cards.reduce((a, b) => (b.nums > a.nums ? b : a));
     const p = projects[+top.dataset.i];
     numEl.textContent = `${p.id} / 0${projects.length}`;
     titleEl.textContent = p.title;
     linkEl.href = p.link;
+    stage.setAttribute('aria-label', `当前项目：${p.title}。点击或按回车切换下一个项目`);
   };
+  let busy = false;
   const move = () => {
-    cards.forEach((ele) => {
-      let nums = ele.nums;
-      if (nums + 1 >= cards.length) {
-        nums = 0;
-        ele.style.transition = ''; // 回到底层：关闭过渡，瞬间落牌
-      } else {
-        nums += 1;
-        ele.style.transition = 'transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)';
-      }
-      ele.style.zIndex = nums;
-      ele.style.transform = transforms[nums];
-      ele.nums = nums;
+    if (busy) return;
+    busy = true;
+    const top = cards.reduce((a, b) => (b.nums > a.nums ? b : a));
+    const settle = reducedMotion ? 0 : 240;
+    stage.classList.add('is-shuffling');
+    meta.classList.add('is-swapping');
+
+    cards.forEach((card) => {
+      if (card === top) return;
+      card.nums += 1;
+      card.style.zIndex = card.nums;
+      card.style.transition = reducedMotion ? 'none' : 'transform .42s cubic-bezier(.22,1,.36,1)';
+      card.style.transform = transforms[card.nums];
     });
-    syncMeta();
+
+    top.style.transition = reducedMotion ? 'none' : 'transform .24s cubic-bezier(.4,0,.2,1), opacity .2s ease, filter .2s ease';
+    top.style.transform = `${transforms[top.nums]} translate(30%, -12%) rotate(8deg) scale(.96)`;
+    top.style.opacity = reducedMotion ? '0' : '.08';
+    top.style.filter = reducedMotion ? 'none' : 'blur(3px)';
+
+    setTimeout(() => {
+      top.nums = 0;
+      top.style.zIndex = 0;
+      top.style.transition = 'none';
+      top.style.transform = transforms[0];
+      top.style.opacity = '0';
+      top.style.filter = 'none';
+      syncMeta();
+      requestAnimationFrame(() => {
+        top.style.transition = reducedMotion ? 'none' : 'opacity .24s ease';
+        top.style.opacity = '1';
+        meta.classList.remove('is-swapping');
+        setTimeout(() => {
+          stage.classList.remove('is-shuffling');
+          busy = false;
+        }, reducedMotion ? 0 : 260);
+      });
+    }, settle);
   };
-  stage.addEventListener('click', move);
+  let suppressClick = false;
+  let pointerStart = null;
+  stage.addEventListener('pointerdown', (event) => {
+    pointerStart = { x: event.clientX, y: event.clientY };
+  });
+  stage.addEventListener('pointerup', (event) => {
+    if (!pointerStart) return;
+    const dx = event.clientX - pointerStart.x;
+    const dy = event.clientY - pointerStart.y;
+    pointerStart = null;
+    if (Math.abs(dx) > 38 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      suppressClick = true;
+      move();
+      setTimeout(() => { suppressClick = false; }, 0);
+    }
+  });
+  stage.addEventListener('pointercancel', () => { pointerStart = null; });
+  stage.addEventListener('click', () => { if (!suppressClick) move(); });
+  stage.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      move();
+    }
+  });
   $('.poker-hint').addEventListener('click', move); // 点击提示胶囊同样换牌
   syncMeta();
 })();
 
 /* ============================================================
-   PPT 轮播：自动播放 + 导航 + 全屏（原生实现，复刻 Swiper）
+   PPT：单页画册，点击左右页面或轻扫翻页
    ============================================================ */
 (function initPPT() {
   const slides = [
@@ -866,33 +972,218 @@ document.addEventListener('keydown', (e) => {
     { n: '05', title: '段落主旨 & 作用', sub: 'Main Idea & Function' },
     { n: '06', title: '课堂讨论', sub: 'Class Discussion' },
   ];
-  const track = $('#pptTrack'), dots = $('#pptDots'), num = $('#pptNum');
+  const wrap = $('#pptWrap'), track = $('#pptTrack'), status = $('#pptStatus');
+  const section = wrap.closest('section');
+  const curEl = $('#pptCur'), totalEl = $('#pptTotal'), progressFill = $('#pptProgressFill');
+  totalEl.textContent = ` / ${String(slides.length).padStart(2, '0')}`;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   track.innerHTML = slides.map((s, i) => `
-    <div class="swiper-slide">
-      <img data-src="./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp" alt="${s.title}" loading="lazy" decoding="async" />
-      <div class="cap">${s.title}</div>
+    <div class="swiper-slide" role="group" aria-roledescription="幻灯片" aria-label="${i + 1} / ${slides.length}：${s.title}" ${i ? 'hidden' : ''}>
+      <img data-ppt-src="./src/assets/images/Freshmans-Dilemma-The-Paralysis-of-Choice (1)_0${i + 1}.webp" alt="${s.title}" decoding="async" draggable="false" />
     </div>`).join('');
-  dots.innerHTML = slides.map((_, i) => `<i data-i="${i}"></i>`).join('');
-  let idx = 0, timer = null;
-  const go = (i) => {
-    idx = (i + slides.length) % slides.length;
-    track.style.transform = `translateX(-${idx * 100}%)`;
-    num.textContent = `${slides[idx].n} / 0${slides.length}`;
-    dots.querySelectorAll('i').forEach((d, j) => d.classList.toggle('on', j === idx));
-  };
-  const autoplay = () => { clearInterval(timer); timer = setInterval(() => go(idx + 1), 3000); };
-  $('#pptNext').addEventListener('click', () => { go(idx + 1); autoplay(); });
-  $('#pptPrev').addEventListener('click', () => { go(idx - 1); autoplay(); });
-  dots.addEventListener('click', (e) => {
-    if (e.target.tagName === 'I') { go(+e.target.dataset.i); autoplay(); }
+  const pages = [...track.children], images = pages.map((page) => page.querySelector('img'));
+  const loads = new Map();
+  let idx = 0, requested = 0, direction = 1, busy = false;
+  let visible = false, printing = false;
+  let animations = [], gesture = null, suppressClickUntil = 0;
+  const normalize = (i) => (i + slides.length) % slides.length;
+  // 每张图片只请求一次；目标页解码完成后才翻动，避免空白帧。
+  function loadPage(i) {
+    if (loads.has(i)) return loads.get(i);
+    const img = images[i];
+    const promise = new Promise((resolve, reject) => {
+      let timeout;
+      const clean = () => { clearTimeout(timeout); img.onload = img.onerror = null; };
+      img.onload = async () => {
+        clean();
+        try { await img.decode(); } catch (_) { /* 已加载的图片可直接显示。 */ }
+        resolve();
+      };
+      img.onerror = () => { clean(); reject(new Error('PPT image unavailable')); };
+      timeout = setTimeout(() => { clean(); reject(new Error('PPT image timeout')); }, 12000);
+      img.src = img.dataset.pptSrc;
+    }).catch((error) => { loads.delete(i); throw error; });
+    loads.set(i, promise);
+    return promise;
+  }
+  function preloadNearby() {
+    [idx, normalize(idx + 1), normalize(idx - 1)].forEach((i) => { loadPage(i).catch(() => {}); });
+  }
+  function render() {
+    wrap.dataset.page = String(idx + 1);
+    progressFill.style.width = `${((idx + 1) / slides.length) * 100}%`;
+    wrap.setAttribute('aria-label', `演示文稿，第 ${idx + 1} 页，共 ${slides.length} 页：${slides[idx].title}。点击左侧上一页、右侧下一页`);
+  }
+  /* 页码滚动：旧数字快出（150ms）、新数字慢入（280ms）——退出永远快于进入；
+     方向与翻页一致：下一页新数字自下方上浮，上一页自上方落下。 */
+  let hudToken = 0;
+  async function rollCounter(sign, animate) {
+    const next = String(idx + 1).padStart(2, '0');
+    if (curEl.textContent === next) return;
+    const token = ++hudToken;
+    curEl.getAnimations().forEach((a) => a.cancel());
+    if (!animate) { curEl.textContent = next; return; }
+    const out = curEl.animate([
+      { transform: 'translateY(0)', opacity: 1 },
+      { transform: `translateY(${-7 * sign}px)`, opacity: 0 },
+    ], { duration: 150, easing: 'ease-in', fill: 'forwards' });
+    await out.finished.catch(() => {});
+    if (token !== hudToken) return;   // 快速连翻时由最新一次接管，避免旧回调写回过期页码
+    out.cancel();
+    curEl.textContent = next;
+    curEl.animate([
+      { transform: `translateY(${7 * sign}px)`, opacity: 0 },
+      { transform: 'translateY(0)', opacity: 1 },
+    ], { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+  }
+  function finishAnimations() { animations.forEach((animation) => animation.finish()); }
+  async function turn() {
+    if (busy || requested === idx) return;
+    busy = true;
+    const target = requested, sign = direction;
+    const outgoing = pages[idx], incoming = pages[target];
+    const turningPage = sign > 0 ? outgoing : incoming;
+    wrap.setAttribute('aria-busy', 'true');
+    wrap.classList.remove('has-error');
+    try {
+      await Promise.all([loadPage(idx), loadPage(target)]);
+      incoming.hidden = false;
+      outgoing.style.zIndex = sign > 0 ? '2' : '1';
+      incoming.style.zIndex = sign > 0 ? '1' : '2';
+      turningPage.style.transformOrigin = 'left center';
+      const animate = visible && !document.hidden && !printing && typeof outgoing.animate === 'function';
+      if (animate) {
+        const minimal = reducedMotion.matches;
+        const mobile = matchMedia('(max-width: 640px)').matches;
+        // 退出快（≈0.33s 内完成淡出）、进入稳（≈0.53s 带方向性浮动衔接），符合演示节奏规范
+        const duration = minimal ? 140 : mobile ? 500 : 600;
+        const timing = { duration, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'both' };
+        if (!minimal) turningPage.classList.add('is-turning');
+        animations = [
+          outgoing.animate(minimal ? [{ opacity: 1 }, { opacity: 0 }] : sign > 0 ? [
+            { transform: 'rotateY(0deg)', opacity: 1, offset: 0 },
+            { transform: `rotateY(${sign * (mobile ? -22 : -30)}deg)`, opacity: .9, offset: .3 },
+            { transform: `rotateY(${sign * -62}deg)`, opacity: 0, offset: .55 },
+            { transform: `rotateY(${sign * -90}deg)`, opacity: 0, offset: 1 },
+          ] : [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.985)', opacity: .8 }], timing),
+          incoming.animate(minimal ? [{ opacity: 0 }, { opacity: 1 }] : sign > 0 ? [
+            { transform: `translateX(${sign * 2.2}%) scale(.985)`, opacity: 0, offset: 0 },
+            { transform: `translateX(${sign * 2.2}%) scale(.985)`, opacity: 0, offset: .1 },
+            { transform: 'translateX(0) scale(1)', opacity: 1, offset: 1 },
+          ] : [
+            { transform: 'rotateY(-90deg)', opacity: 0, offset: 0 },
+            { transform: 'rotateY(-78deg)', opacity: 1, offset: .14 },
+            { transform: 'rotateY(-30deg)', opacity: 1, offset: .55 },
+            { transform: 'rotateY(0deg)', opacity: 1, offset: 1 },
+          ], timing),
+        ];
+        await Promise.all(animations.map((animation) => animation.finished.catch(() => {})));
+      }
+      idx = target;
+      render();
+      rollCounter(sign, animate && !reducedMotion.matches);
+      status.textContent = `第 ${idx + 1} 页，共 ${slides.length} 页，${slides[idx].title}`;
+      preloadNearby();
+    } catch (_) {
+      requested = idx;
+      status.textContent = '图片暂时无法加载，请再次点击翻页重试。';
+      wrap.classList.add('has-error');
+    } finally {
+      pages.forEach((page, i) => { page.hidden = i !== idx; });
+      animations.forEach((animation) => animation.cancel());
+      animations = [];
+      turningPage.classList.remove('is-turning');
+      outgoing.style.removeProperty('z-index');
+      turningPage.style.removeProperty('transform-origin');
+      incoming.style.removeProperty('z-index');
+      wrap.removeAttribute('aria-busy');
+      busy = false;
+      if (requested !== idx) turn();
+    }
+  }
+  function requestPage(i, sign) {
+    requested = normalize(i);
+    direction = sign;
+    turn();
+  }
+  wrap.querySelector('.ppt-page-controls').addEventListener('click', (e) => {
+    const button = e.target.closest('.ppt-page-hit');
+    // 轻扫结束后浏览器可能补发 click，避免一次手势翻两页。
+    if (!button || (e.detail !== 0 && performance.now() < suppressClickUntil)) return;
+    const sign = button.id === 'pptNext' ? 1 : -1;
+    requestPage(requested + sign, sign);
   });
-  $('#pptFull').addEventListener('click', () => {
-    const wrap = $('#pptWrap');
-    if (!document.fullscreenElement) wrap.requestFullscreen?.();
-    else document.exitFullscreen?.();
+  wrap.addEventListener('keydown', (e) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const sign = e.key === 'ArrowRight' ? 1 : -1;
+      requestPage(requested + sign, sign);
+    }
   });
-  go(0);
-  autoplay();
+  wrap.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('.ppt-page-hit')) return;
+    if (!e.isPrimary) { gesture = null; suppressClickUntil = performance.now() + 600; return; }
+    if (e.button !== 0) return;
+    gesture = { id: e.pointerId, type: e.pointerType, x: e.clientX, y: e.clientY };
+  });
+  wrap.addEventListener('pointerup', (e) => {
+    if (!gesture || e.pointerId !== gesture.id) return;
+    const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
+    const touch = gesture.type !== 'mouse';
+    gesture = null;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) suppressClickUntil = performance.now() + 600;
+    if (touch && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      const sign = dx < 0 ? 1 : -1;
+      requestPage(requested + sign, sign);
+    }
+  });
+  wrap.addEventListener('pointercancel', () => { gesture = null; suppressClickUntil = performance.now() + 600; });
+  const full = $('#pptFull');
+  full.hidden = !wrap.requestFullscreen || !document.fullscreenEnabled;
+  full.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement === wrap) await document.exitFullscreen();
+      else await wrap.requestFullscreen();
+    } catch (_) { status.textContent = '当前浏览器无法进入全屏。'; }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    const label = document.fullscreenElement === wrap ? '退出全屏' : '全屏';
+    full.setAttribute('aria-label', label);
+    full.title = label;
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) finishAnimations(); });
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) finishAnimations(); });
+  window.addEventListener('beforeprint', () => {
+    printing = true;
+    finishAnimations();
+    images.forEach((_, i) => { loadPage(i).catch(() => {}); });
+  });
+  window.addEventListener('afterprint', () => { printing = false; });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      visible = entries[0].isIntersecting;
+      if (visible) preloadNearby();
+      else finishAnimations();
+    }, { threshold: 0 }).observe(wrap);
+    const preloadObserver = new IntersectionObserver((entries, observer) => {
+      if (!entries[0].isIntersecting) return;
+      preloadNearby();
+      observer.disconnect();
+    }, { rootMargin: '500px 0px' });
+    preloadObserver.observe(wrap);
+  } else { visible = true; preloadNearby(); }
+  // 板块入场编排：进入视口后一次性加 .in-view，触发标题 → 副标题 → 书本的阶梯收束动画
+  if (section) {
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((entries, observer) => {
+        if (!entries[0].isIntersecting) return;
+        section.classList.add('in-view');
+        observer.disconnect();
+      }, { threshold: 0.15 }).observe(section);
+    } else { section.classList.add('in-view'); }
+  }
+  render();
 })();
 
 /* ============================================================
@@ -1823,8 +2114,8 @@ window.addEventListener('afterprint', () => {
 
 /* ============================================================
    背景视频诊断面板（仅 URL 带 ?bgdebug=1 或 #bgdebug 时启用）
-   - 跨浏览器问题定位用：展示 hls.js 实际加载来源、video 状态机、
-     媒体事件时间线、hls.js 错误明细；正常访客零开销、不加载
+   - 跨浏览器问题定位用：展示 video 状态机、媒体事件时间线；
+     正常访客零开销、不加载
    ============================================================ */
 (function bgDebug() {
   if (!/[?#&]bgdebug/.test(location.search + location.hash)) return;
@@ -1835,7 +2126,7 @@ window.addEventListener('afterprint', () => {
    'loadeddata', 'loadedmetadata', 'emptied', 'abort', 'suspend', 'ended'].forEach((ev) =>
     video.addEventListener(ev, () =>
       push('video.' + ev + (video.error ? ` (code=${video.error.code} ${video.error.message})` : ''))));
-  // 捕获脚本资源加载失败（如 hls.min.js 本地+CDN 全部失败）
+  // 捕获脚本资源加载失败
   window.addEventListener('error', (e) => {
     if (e.target && e.target.tagName === 'SCRIPT') push('script加载失败: ' + (e.target.src || ''));
   }, true);
@@ -1847,53 +2138,15 @@ window.addEventListener('afterprint', () => {
     const v = video;
     panel.textContent =
 `== 背景视频诊断 ==  在线:${navigator.onLine}
-hls.js来源: ${window.__hlsLoadedFrom || '尚未加载成功'}
-Hls可用: ${typeof window.Hls !== 'undefined'} / isSupported: ${window.Hls ? Hls.isSupported() : '-'}
 video: readyState=${v.readyState} networkState=${v.networkState} paused=${v.paused}
        t=${v.currentTime.toFixed(1)}s size=${v.videoWidth}x${v.videoHeight} muted=${v.muted}
        src=${(v.currentSrc || '').slice(0, 70)}
        err=${v.error ? v.error.code + ':' + v.error.message : 'null'}
-hls错误: ${(window.__hlsErrLog || []).length ? '' : '无'}
-${(window.__hlsErrLog || []).slice(-5).map((x) => JSON.stringify(x)).join('\n')}
 -- 事件时间线(新→旧) --
-${log.slice(0, 12).join('\n')}`;
+${log.slice(0, 14).join('\n')}`;
     setTimeout(render, 1000);
   })();
 })();
-
-/* ============================================================
-   hls.js 按需加载（懒加载）：仅当本地 mp4 播放失败需要远程兜底时才加载
-   - 绝大多数访客走本地 mp4 循环（约 2MB），604KB 的 hls.js 无需下载；
-     仅在本地视频缺失/播放失败时，才按"本地副本优先 + CDN 逐级兜底"加载：
-     本地副本（./src/assets/js/hls.min.js）保证任意网络/离线下行为一致；
-     CDN 仅在本地文件缺失时兜底，全部失败则由 Splash 超时兜底放行
-   - __hlsLoadState: 0=未加载 1=加载中 2=就绪（并发调用去重）
-   ============================================================ */
-var __hlsLoadState = 0;
-function loadHlsWhenNeeded(cb) {
-  if (__hlsLoadState === 2) { cb(); return; }
-  if (__hlsLoadState === 1) { document.addEventListener('hls-ready', () => cb(), { once: true }); return; }
-  __hlsLoadState = 1;
-  const sources = [
-    './src/assets/js/hls.min.js',
-    'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js',
-    'https://unpkg.com/hls.js@1/dist/hls.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
-  ];
-  let i = 0;
-  (function next() {
-    if (i >= sources.length) return; // 全部失败：Splash 超时兜底放行，保持海报静态背景
-    const s = document.createElement('script');
-    s.src = sources[i++];
-    s.onload = () => {
-      __hlsLoadState = 2;
-      window.__hlsLoadedFrom = s.src;
-      document.dispatchEvent(new Event('hls-ready'));
-    };
-    s.onerror = () => { s.remove(); next(); };
-    document.head.appendChild(s);
-  })();
-}
 
 /* ============================================================
    内联事件迁移：原 HTML 中的 onclick/onkeydown 统一改为

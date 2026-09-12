@@ -4,10 +4,13 @@
   :root {
     --bg: #000000;
     --fg: #ffffff;
-    --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    --font-serif: "Instrument Serif", Georgia, serif;
+    --font-sans: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    /* 无外部字体依赖：中文回落本地高品质宋体/明体，英文回落 Georgia，保持优雅衬线气质 */
+    --font-serif: "Source Han Serif SC", "Noto Serif CJK SC", "STSong", "SimSun", Georgia, serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* 键盘可达性：Tab 聚焦时显示清晰焦点环（鼠标点击不触发） */
+  :focus-visible { outline: 2px solid rgba(167,139,250,0.9); outline-offset: 2px; }
   html { scroll-behavior: smooth; }
   body {
     background-color: var(--bg);
@@ -37,14 +40,22 @@
   }
   .nav-glass { background: rgba(17,24,39,0.55); backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%); }
 
-  /* 滚动入场动画 */
-  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
-  .reveal.in-view { opacity: 1; transform: none; }
+  /* 滚动期间临时关闭液态玻璃实时模糊与求学轨迹 SVG 辉光（同类方案见 .cert-stage.moving），
+     静止后由 JS 移除 .is-scrolling 复原 —— 静止视觉不变，仅滚动瞬间去重特效换取流畅 */
+  .is-scrolling .liquid-glass,
+  .is-scrolling .edu-route-status { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .is-scrolling .edu-path-progress,
+  .is-scrolling .edu-traveler,
+  .is-scrolling .edu-traveler-halo { filter: none; }
+
+  /* 滚动入场动画（仅在 JS 可用时隐藏初始态；no-js 下静态内容始终可读） */
+  .js .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .js .reveal.in-view { opacity: 1; transform: none; }
 
   /* 通用区块标题 */
   .sec-head { margin-bottom: 56px; }
   .sec-title { font-family: var(--font-serif); font-size: 36px; letter-spacing: -0.02em; }
-  .sec-sub { color: rgba(255,255,255,0.5); margin-top: 12px; font-size: 16px; }
+  .sec-sub { color: rgba(255,255,255,0.65); margin-top: 12px; font-size: 16px; }
 
   /* ============================================================
      动态背景视频
@@ -85,7 +96,7 @@
   }
   .splash.hidden { opacity: 0; pointer-events: none; }
   .splash h1 { font-family: var(--font-serif); font-size: 72px; letter-spacing: -0.02em; position: relative; z-index: 1; }
-  .splash .tag { color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; position: relative; z-index: 1; }
+  .splash .tag { color: rgba(255,255,255,0.65); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; position: relative; z-index: 1; }
   .splash .load-status {
     position: relative; z-index: 1; min-height: 20px; margin-bottom: -20px;
     color: rgba(255,255,255,0.62); font-size: 12px; letter-spacing: 0.08em;
@@ -102,6 +113,14 @@
   .splash .enter.ready { opacity: 1; transform: none; pointer-events: auto; }
   .splash .enter.retry { opacity: 1; transform: none; pointer-events: auto; border-color: rgba(252,165,165,.5); color: #fecaca; }
   .splash:hover .enter { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+  /* 失败逃生口：资源加载失败时显示的次级动作，弱化样式避免与"重试"竞争 */
+  .splash .enter.force {
+    opacity: 1; transform: none; pointer-events: auto; margin-top: -14px;
+    padding: 6px 16px; border-color: transparent; background: none;
+    color: rgba(255,255,255,0.55); font-size: 13px; letter-spacing: 0.1em;
+    text-decoration: underline; text-underline-offset: 4px;
+  }
+  .splash .enter.force:hover { background: none; color: rgba(255,255,255,0.9); }
   .load-bar { width: 180px; height: 2px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; position: relative; z-index: 1; }
   .load-bar i { display: block; height: 100%; width: 0; background: #fff; transition: width 0.3s; }
 
@@ -199,23 +218,33 @@
      ============================================================ */
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
   .nav-bar {
-    border-radius: 999px; padding: 12px 24px;
+    border-radius: 999px; padding: 12px 24px; min-height: 68px;
     display: flex; align-items: center; justify-content: space-between;
     max-width: 1024px; margin: 16px auto; position: relative; overflow: hidden;
-    animation: navIn 0.8s ease both;
+    animation: navIn 0.8s cubic-bezier(.22,1,.36,1) both paused;
   }
+  .site-entered .nav-bar { animation-play-state: running; }
   @keyframes navIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
-  .nav-left { display: flex; align-items: center; gap: 32px; position: relative; z-index: 1; }
-  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; cursor: pointer; }
-  .nav-links { display: flex; align-items: center; gap: 32px; font-size: 16px; font-weight: 500; }
-  /* 初始只显示品牌名：所有板块标签默认隐藏 */
-  .nav-links button { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 16px; transition: color 0.3s; display: none; }
+  .nav-left { display: flex; align-items: center; gap: 32px; min-height: 44px; position: relative; z-index: 1; }
+  .nav-brand { display: flex; align-items: center; height: 44px; line-height: 1; gap: 8px; font-weight: 600; font-size: 20px; letter-spacing: -0.02em; cursor: pointer; }
+  .nav-links { position: relative; display: flex; align-items: center; min-height: 44px; gap: 32px; font-size: 16px; font-weight: 500; }
+  /* 所有板块标签默认显示（不再按"见过"渐进解锁） */
+  .nav-links button { position: relative; z-index: 1; height: 44px; padding-block: 0; align-items: center; justify-content: center; line-height: 1; background: none; border: none; color: rgba(255,255,255,0.7); font-size: 16px; transition: color 0.3s; display: inline-flex; animation: navLabelIn 0.5s cubic-bezier(0.22,1,0.36,1) both; }
   .nav-links button:hover, .nav-links button.active { color: #fff; }
-  /* 已进入过的板块：标签永久显示（从左到右依次累积浮现，动画仅首次播放一次） */
-  .nav-links button.seen { display: inline-block; animation: navLabelIn 0.5s cubic-bezier(0.22,1,0.36,1) both; }
   @keyframes navLabelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .nav-right { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
-  .nav-btn { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 14px; display: flex; align-items: center; gap: 6px; transition: color 0.3s; }
+  .nav-active-indicator {
+    position: absolute; z-index: 0; left: 0; top: 50%; height: 44px;
+    width: var(--nav-indicator-w, 0px); border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.13);
+    background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(139,92,246,.16));
+    box-shadow: inset 0 1px rgba(255,255,255,.14), 0 7px 20px rgba(76,29,149,.18);
+    opacity: 0; pointer-events: none;
+    transform: translate3d(var(--nav-indicator-x, 0px), -50%, 0);
+    transition: transform .46s cubic-bezier(.22,1,.36,1), width .46s cubic-bezier(.22,1,.36,1), opacity .2s ease;
+  }
+  .nav-active-indicator.visible { opacity: 1; }
+  .nav-right { display: flex; align-items: center; min-height: 44px; gap: 16px; position: relative; z-index: 1; }
+  .nav-btn { height: 44px; line-height: 1; justify-content: center; background: none; border: none; color: rgba(255,255,255,0.7); font-size: 14px; display: flex; align-items: center; gap: 6px; transition: color 0.3s; }
   .nav-btn:hover { color: #fff; }
   /* 增大音乐按钮点击/命中范围：横纵各扩 10px（负外边距抵消，不改变布局占位） */
   #audioToggle { margin: -10px; padding: 10px; }
@@ -270,13 +299,14 @@
     letter-spacing: -0.02em;
     background: linear-gradient(180deg, #fff, rgba(255,255,255,0.9) 60%, rgba(255,255,255,0.5));
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-    animation: fadeUp 0.8s 0.1s both;
+    animation: heroTitleIn .95s .08s cubic-bezier(.16,1,.3,1) both paused;
   }
-  .hero .uni { color: rgba(255,255,255,0.7); font-size: clamp(14px, 2vw, 28px); font-weight: 500; letter-spacing: 0.25em; text-transform: uppercase; animation: fadeUp 0.8s 0.2s both; }
+  .hero .uni { color: rgba(255,255,255,0.7); font-size: clamp(14px, 2vw, 28px); font-weight: 500; letter-spacing: 0.25em; text-transform: uppercase; animation: heroElementIn .72s .22s cubic-bezier(.22,1,.36,1) both paused; }
   /* 座右铭滚动区：固定高度窗口 + 纵向轨道滑动，每 2 秒滚动一行 */
   .hero .rotating {
     height: 104px; overflow: hidden;
     display: flex; align-items: flex-start; justify-content: center;
+    animation: heroElementIn .76s .34s cubic-bezier(.22,1,.36,1) both paused;
   }
   .hero .rotating-track {
     display: flex; flex-direction: column;
@@ -292,9 +322,20 @@
     .hero .rotating, .hero .rotating-track p { height: 60px; }
     .hero .rotating-track p { font-size: 40px; }
   }
-  .hero .desc { color: rgba(255,255,255,0.7); max-width: 640px; font-size: 17px; line-height: 1.8; animation: fadeUp 0.8s 0.6s both; }
+  .hero .desc { color: rgba(255,255,255,0.7); max-width: 640px; font-size: 17px; line-height: 1.8; animation: heroElementIn .72s .48s cubic-bezier(.22,1,.36,1) both paused; }
+  @keyframes heroTitleIn {
+    from { opacity: 0; transform: translateY(34px) scale(.985); filter: blur(10px); clip-path: inset(100% 0 0); }
+    to { opacity: 1; transform: none; filter: blur(0); clip-path: inset(0 0 0); }
+  }
+  @keyframes heroElementIn { from { opacity: 0; transform: translateY(20px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
-  .hero-btns { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 16px; animation: fadeUp 0.8s 0.8s both; }
+  .hero-btns { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 16px; animation: heroElementIn .72s .62s cubic-bezier(.22,1,.36,1) both paused; }
+  .site-entered .hero h1,
+  .site-entered .hero .uni,
+  .site-entered .hero .rotating,
+  .site-entered .hero .desc,
+  .site-entered .hero-btns,
+  .site-entered .hero-links { animation-play-state: running; }
   .pill-btn {
     border-radius: 999px; padding: 12px 24px; border: none;
     background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.85);
@@ -302,14 +343,28 @@
     transition: transform 0.3s, color 0.3s; text-decoration: none;
   }
   .pill-btn:hover { transform: scale(1.05); color: #fff; }
+  /* Hero 次级入口：文字链（次视觉层级，主按钮保留 2 个） */
+  .hero-links {
+    display: flex; align-items: center; justify-content: center; gap: 22px;
+    position: relative; z-index: 1; margin-top: -14px;
+    animation: heroElementIn .72s .7s cubic-bezier(.22,1,.36,1) both paused;
+  }
+  .hero-link {
+    background: none; border: none; padding: 4px 2px; cursor: pointer;
+    color: rgba(255,255,255,0.65); font-size: 14px; letter-spacing: 0.06em;
+    border-bottom: 1px solid rgba(255,255,255,0.25);
+    transition: color 0.3s, border-color 0.3s;
+  }
+  .hero-link:hover { color: #fff; border-color: rgba(255,255,255,0.7); }
+  .hero-links-divider { color: rgba(255,255,255,0.35); }
   @media (max-width: 560px) {
     .hero { min-height: 100svh; gap: 22px; padding: 84px 20px 32px; justify-content: center; }
     .hero .uni { font-size: 12px; letter-spacing: .14em; }
     .hero .desc { max-width: 330px; font-size: 15px; line-height: 1.65; }
-    .hero-btns { width: min(100%, 340px); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hero-btns { width: min(100%, 340px); display: grid; grid-template-columns: 1fr; gap: 10px; }
     .hero-btns .pill-btn { min-height: 48px; padding: 10px 12px; justify-content: center; font-size: 14px; }
-    .hero-btns .pill-btn:nth-child(1), .hero-btns .pill-btn:nth-child(2) { grid-column: span 1; }
-    .hero-btns .pill-btn:nth-child(3), .hero-btns .pill-btn:nth-child(4) { grid-column: span 1; }
+    .hero-links { margin-top: -4px; gap: 18px; }
+    .hero-link { font-size: 13px; }
   }
   .hero-input { display: flex; align-items: center; }
   .hero-input input {
@@ -401,9 +456,10 @@
     width: calc(var(--cw) * 2.2);
     height: calc(var(--cw) * 0.74);
     margin: 12px auto 0;
-    user-select: none;
+    user-select: none; touch-action: pan-y;
     cursor: pointer;
   }
+  .poker-stage:focus-visible { outline: 2px solid rgba(165,180,252,.9); outline-offset: 12px; border-radius: 16px; }
   .poker-card {
     position: absolute; top: 0; left: 0;
     width: var(--cw); height: calc(var(--cw) * 0.66);
@@ -412,8 +468,9 @@
     background: #0b0e1a;
     transform-origin: bottom left; /* 关键：绕左下角旋转，形成扇形牌堆 */
     box-shadow: 0 16px 44px rgba(0,0,0,0.5);
-    will-change: transform;
+    will-change: transform, opacity, filter;
   }
+  .poker-stage.is-shuffling { cursor: progress; }
   .poker-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .poker-card .cap {
     position: absolute; left: 0; right: 0; bottom: 0;
@@ -425,6 +482,8 @@
     display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
     width: calc(var(--cw) * 2.2); margin: 18px auto 0;
   }
+  .poker-meta > * { transition: opacity .18s ease, transform .24s cubic-bezier(.22,1,.36,1); }
+  .poker-meta.is-swapping > * { opacity: 0; transform: translateY(8px); }
   .poker-meta .poker-num { font-family: ui-monospace, monospace; font-size: 14px; letter-spacing: 0.1em; color: rgba(255,255,255,0.55); }
   .poker-meta h3 { font-size: 22px; font-weight: 600; color: #fff; }
   .poker-meta .poker-link {
@@ -485,54 +544,79 @@
     .poker-meta .poker-link { margin-left: 0; }
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .nav-bar, .hero h1, .hero .uni, .hero .rotating, .hero .desc, .hero-btns, .hero-links { animation: none; opacity: 1; transform: none; filter: none; clip-path: none; }
+    .nav-active-indicator, .poker-card, .poker-meta > * { transition-duration: .01ms !important; }
+  }
+
+  /* ============================================================
+     移动端性能降级：玻璃模糊减半；证书墙 81 层卡片直接去掉实时
+     backdrop-filter（改半透明深底色），避免小屏 GPU 高负载掉帧
+     ============================================================ */
+  @media (max-width: 768px) {
+    .liquid-glass, .nav-glass { backdrop-filter: blur(8px) saturate(150%); -webkit-backdrop-filter: blur(8px) saturate(150%); }
+    .cert-cell .cert-inner {
+      backdrop-filter: none; -webkit-backdrop-filter: none;
+      background: rgba(17,24,39,0.72);
+    }
+  }
+
   /* ============================================================
      PPT 轮播
      ============================================================ */
-  .swiper-wrap { position: relative; border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.03); }
-  .swiper-track { display: flex; transition: transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1); }
-  .swiper-slide { flex: 0 0 100%; position: relative; aspect-ratio: 16 / 9; }
-  .swiper-slide img { width: 100%; height: 100%; object-fit: cover; }
-  .swiper-slide .cap {
-    position: absolute; left: 24px; bottom: 24px; z-index: 3;
-    padding: 10px 18px; border-radius: 999px;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.1);
-    font-size: 14px;
-  }
-  /* 底部渐变信息条（与原版一致） */
-  .swiper-slide::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%;
-    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.55));
-    pointer-events: none; z-index: 1;
-  }
-  .swiper-tools { position: absolute; right: 16px; bottom: 16px; z-index: 5; display: flex; gap: 8px; }
-  .swiper-btn {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
-    color: #fff; font-size: 16px; display: flex; align-items: center; justify-content: center;
-    transition: background 0.3s;
-  }
-  .swiper-btn:hover { background: rgba(255,255,255,0.2); }
-  .swiper-dots { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; z-index: 4; }
-  .swiper-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: all 0.3s; }
-  .swiper-dots i.on { background: #fff; transform: scale(1.3); }
-  .swiper-info { position: absolute; left: 24px; top: 24px; z-index: 2; pointer-events: none; }
-  .swiper-info .n { font-family: ui-monospace, monospace; font-size: 14px; color: rgba(255,255,255,0.7); }
+  /* 板块入场编排：标题 → 副标题 → 书本按 0.16s 阶梯"收束"落版（JS 观察进入视口后加 .in-view） */
+  #presentation .sec-title, #presentation .sec-sub, #presentation .swiper-wrap { opacity: 0; }
+  #presentation.in-view .sec-title { animation: pptRiseIn .6s cubic-bezier(.22,1,.36,1) both; }
+  #presentation.in-view .sec-sub { animation: pptRiseIn .6s cubic-bezier(.22,1,.36,1) .16s both; }
+  #presentation.in-view .swiper-wrap { animation: pptStageIn .68s cubic-bezier(.22,1,.36,1) .32s both; }
+  @keyframes pptRiseIn { from { opacity: 0; transform: translateY(20px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+  @keyframes pptStageIn { from { opacity: 0; transform: translateY(28px) scale(.965); } to { opacity: 1; transform: none; } }
+  /* 单页画册：薄封皮、层叠纸边与书脊，静态质感不增加持续动画。 */
+  .swiper-wrap { position: relative; padding: 3px 7px 9px 5px; border-radius: 4px 10px 10px 4px; background: #45443f; box-shadow: 0 2px 3px rgba(0,0,0,.2), 0 22px 48px rgba(0,0,0,.28); }
+  .swiper-wrap::before { content: ""; position: absolute; left: 6px; right: 4px; top: 5px; bottom: 3px; border-radius: 2px 7px 7px 2px; background: repeating-linear-gradient(0deg, #dad8d1 0px, #dad8d1 1px, #f4f2eb 1px, #f4f2eb 3px); box-shadow: 1px 0 0 #b8b5ab; pointer-events: none; }
+  .swiper-track { position: relative; width: 100%; aspect-ratio: 16 / 9; perspective: 1800px; isolation: isolate; overflow: hidden; border-radius: 1px 5px 5px 1px; touch-action: pan-y pinch-zoom; background: #f5f4ef; }
+  .swiper-track::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 26px; z-index: 3; pointer-events: none; background: linear-gradient(90deg, rgba(47,39,26,.17), rgba(255,255,255,.18) 22%, rgba(47,39,26,.055) 42%, transparent); }
+  .swiper-slide { position: absolute; inset: 0; backface-visibility: hidden; background: #faf9f5; }
+  .swiper-slide[hidden] { display: none; }
+  .swiper-slide img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+  .swiper-slide::before { content: ""; position: absolute; inset: 0; pointer-events: none; border: 1px solid rgba(84,72,48,.08); box-shadow: inset -2px 0 3px rgba(72,57,32,.05); }
+  .swiper-slide::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(var(--shade-angle, 90deg), rgba(58,46,29,.25), transparent 65%); }
+  .swiper-slide.is-turning::after { animation: pptPageShade 680ms cubic-bezier(.22,1,.36,1) both; }
+  @keyframes pptPageShade { 0% { opacity: 0; } 55% { opacity: .7; } 100% { opacity: 0; } }
+  .ppt-page-controls { position: absolute; inset: 3px 7px 9px 5px; z-index: 4; display: flex; touch-action: pan-y pinch-zoom; }
+  .ppt-page-hit { flex: 1; min-width: 0; border: 0; padding: 0; background: transparent; border-radius: 0; -webkit-tap-highlight-color: transparent; touch-action: pan-y pinch-zoom; }
+  .ppt-page-prev { cursor: w-resize; }
+  .ppt-page-next { cursor: e-resize; }
+  .swiper-wrap:focus-visible, .ppt-page-hit:focus-visible { outline: 2px solid #8396ad; outline-offset: -3px; }
+  .ppt-full { position: absolute; top: 11px; right: 15px; z-index: 5; display: grid; place-items: center; width: 38px; height: 38px; padding: 10px; border: 1px solid rgba(65,62,53,.12); border-radius: 50%; background: rgba(248,247,242,.9); color: #585850; opacity: 0; transition: opacity .2s ease; }
+  .ppt-full svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .ppt-full[hidden] { display: none; }
+  .swiper-wrap:hover .ppt-full, .swiper-wrap:focus-within .ppt-full { opacity: .8; }
+  .ppt-full:focus-visible { opacity: 1; outline: 2px solid #8396ad; outline-offset: 2px; }
+  .ppt-status { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* 页码 HUD：右下角悬浮，纯展示不拦截翻页点击；滚动数字 + 进度条随翻页推进 */
+  .ppt-hud { position: absolute; right: 16px; bottom: 16px; z-index: 5; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+  .ppt-counter { display: inline-flex; align-items: baseline; padding: 4px 10px; border-radius: 999px; background: rgba(24,23,20,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: #f5f4ef; font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+  .ppt-counter-cur { display: inline-block; font-weight: 600; }
+  .ppt-counter-total { opacity: .65; }
+  .ppt-progress { width: 72px; height: 2px; border-radius: 2px; background: rgba(24,23,20,.28); overflow: hidden; }
+  .ppt-progress-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: rgba(24,23,20,.72); transition: width .5s cubic-bezier(.22,1,.36,1); }
+  .swiper-wrap.has-error .ppt-status { inset: auto 16px 22px; width: auto; height: auto; padding: 10px 14px; clip-path: none; white-space: normal; color: #fff; background: #252a35; border-radius: 8px; font-size: 13px; z-index: 6; pointer-events: none; }
+  .swiper-wrap:fullscreen { width: 100%; height: 100%; border: 0; padding: 0; border-radius: 0; display: flex; align-items: center; justify-content: center; background: #141412; box-shadow: none; }
+  .swiper-wrap:fullscreen::before { display: none; }
+  .swiper-wrap:fullscreen .swiper-track { flex: none; width: min(100%, calc(100dvh * 16 / 9)); border-radius: 0; }
+  .swiper-wrap:fullscreen .ppt-page-controls { inset: auto; top: 50%; left: 50%; width: min(100%, calc(100dvh * 16 / 9)); aspect-ratio: 16 / 9; transform: translate(-50%, -50%); }
+  .swiper-wrap:fullscreen .ppt-full { position: fixed; }
   @media (max-width: 640px) {
-    /* 手机端：字幕移至顶部，避免与底部控件重叠 */
-    .swiper-slide .cap {
-      left: 12px; top: 12px; bottom: auto;
-      max-width: calc(100% - 24px);
-      padding: 8px 14px; font-size: 12px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .swiper-info { display: none; }
-    /* 指示点靠左、按钮靠右，互不重叠；按钮符合 44px 触控标准 */
-    .swiper-dots { left: 16px; bottom: 22px; transform: none; gap: 6px; }
-    .swiper-dots i { width: 7px; height: 7px; }
-    .swiper-tools { right: 12px; bottom: 12px; gap: 10px; }
-    .swiper-btn { width: 44px; height: 44px; font-size: 20px; background: rgba(0,0,0,0.55); backdrop-filter: blur(8px); }
+    .swiper-wrap { padding: 2px 4px 7px 3px; border-radius: 3px 7px 7px 3px; }
+    .swiper-wrap::before { left: 4px; right: 2px; bottom: 2px; }
+    .swiper-track::after { width: 16px; }
+    .ppt-page-controls { inset: 2px 4px 7px 3px; }
+    .ppt-full { top: 6px; right: 8px; width: 44px; height: 44px; }
+    .swiper-slide.is-turning::after { animation: none; }
   }
+  @media (hover: none) { .ppt-full { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .swiper-slide.is-turning::after { animation: none; } .ppt-full { transition: none; } }
 
   /* ============================================================
      求学之路 & 荣誉认证
@@ -1086,9 +1170,10 @@
     /* 卡片与图片不跨页断裂 */
     .liquid-glass, .swiper-slide, .cert-card, .edu-card, .poker-card { break-inside: avoid; page-break-inside: avoid; }
     /* PPT 演示文稿：全部幻灯片缩小为 2 列并排，避免一图一页 */
-    .swiper-wrap { overflow: visible !important; height: auto !important; background: none !important; }
-    .swiper-track { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; transform: none !important; }
-    .swiper-slide { position: static !important; flex: none !important; width: 100% !important; height: auto !important; aspect-ratio: auto !important; margin-bottom: 0 !important; background: #fff !important; }
+    .swiper-wrap { overflow: visible !important; height: auto !important; padding: 0 !important; background: none !important; }
+    .swiper-track { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; aspect-ratio: auto !important; transform: none !important; perspective: none !important; }
+    .swiper-slide, .swiper-slide[hidden] { display: block !important; position: static !important; flex: none !important; width: 100% !important; height: auto !important; aspect-ratio: auto !important; margin-bottom: 0 !important; background: #fff !important; }
+    .ppt-page-controls, .ppt-full, .ppt-status, .ppt-hud, .swiper-wrap::before, .swiper-track::after, .swiper-slide::before { display: none !important; }
     .swiper-slide img { object-fit: contain !important; }
     .swiper-slide .cap, .swiper-slide::after { display: none !important; }
     .swiper-info, .swiper-dots { display: none !important; }
